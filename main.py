@@ -45,8 +45,9 @@ class Auction(object):
     def get_embed_msg(self, args=None):
         description = '參與拍賣: `/add -武將 曹操` 或用編號 `/add -0 曹操`，請注意不要打錯字!\n' \
                       '刪除拍賣: `/remove -武將 曹操` 或用編號 `/remove -0 曹操`\n' \
+                      '(類別說明 `0` = `武將`，`1` = `武將碎片`，`2` = `神兵`，`3` = `神兵碎片`\n' \
                       '絲綢(🧶)、軍令(🎖️)每天會在 <#1028281656739647498> <#1028281627723452516> 頻道用抽取的\n\n' \
-                      '**管理員指令**' \
+                      '**管理員指令**\n' \
                       '重置拍賣：\n`/clear`或`/reset`，需有管理身分組才能生效\n' \
                       '強制增加拍賣：`/fadd -<type> <@people> <item_name>`\n' \
                       '強制刪除拍賣：`/fremove -<type> <@people> <item_name>`\n' \
