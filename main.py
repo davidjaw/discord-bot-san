@@ -30,8 +30,6 @@ class Auction(object):
             'weapon': {},
             'weapon_frag': {},
             'soul': {},
-            'token': [],
-            'silk': [],
         }
         self.score = {}
         for k in self.item_types.keys():
@@ -39,6 +37,9 @@ class Auction(object):
 
     def num2attr(self, num):
         return self.attr_name_en[num]
+
+    def num2attr_cn(self, num):
+        return self.attr_name_cn[num]
 
     def attr2num(self, string):
         return self.attr_name_cn.index(string)
@@ -56,26 +57,30 @@ class Auction(object):
                       '刪除整項拍賣物品：`/frmitem -<type> -<item_name>`    (還沒做)\n' \
                       '輸出拍賣資料：`/dump`\n' \
                       '載入拍賣資料：`/load (optional: -rr) <STRING>`\n\n'
-        info_type = args[0]
-        target_items = [] if len(args) < 2 else args[1]
-        if info_type != -2:
+        if type(args) is int:
+            if args == -1:
+                args = {}
+                for x in range(len(self.score)):
+                    args[x] = []
+            else:
+                embed = discord.Embed(title='指令拍賣機器人', description=description, color=0x6f5dfe)
+                return embed
+        else:
             description = '使用說明請參考：`/howtouse` 或到 <#1027916438297645138>\n\n'
 
         embed = discord.Embed(title='指令拍賣機器人', description=description, color=0x6f5dfe)
-        for i in range(len(self.attr_name_cn)):
-            if (info_type > -1 and info_type != i) or info_type < -1:
-                continue
-            item_type = self.item_types[self.num2attr(i)]
+        for item_type_num in sorted(args.keys()):
+            item_type = self.item_types[self.num2attr(item_type_num)]
             item_description = ''
+            if len(args[item_type_num]) == 0:
+                args[item_type_num] = item_type.keys()
             if len(item_type.keys()) == 0:
                 item_description += ' (尚無)'
             else:
-                for k in item_type.keys():
-                    if info_type > -1 and len(target_items) > 0 and k not in target_items:
-                        continue
+                for k in args[item_type_num]:
                     bidders = item_type[k]
-                    # sort bidder via its socre
-                    bidder_scores = [self.score[self.num2attr(i)][k][x] for x in bidders]
+                    # sort bidder via its score
+                    bidder_scores = [self.score[self.num2attr(item_type_num)][k][x] for x in bidders]
                     bidders = [x for x, _ in sorted(zip(bidders, bidder_scores), key=lambda x: x[1])]
                     bidder_scores = sorted(bidder_scores)
                     bidder_scores = list(reversed(bidder_scores))
@@ -85,7 +90,7 @@ class Auction(object):
                     for p_idx, p in enumerate(bidders):
                         item_description += f'{p.display_name} - {bidder_scores[p_idx]}{"" if p_idx == len(bidders) - 1 else ", "}\n'
 
-            embed.add_field(name=f'{i}-{self.attr_name_cn[i]}', value=item_description, inline=True)
+            embed.add_field(name=f'{item_type_num}-{self.attr_name_cn[item_type_num]}', value=item_description, inline=True)
         return embed
 
     def add_bid(self, ctx, bid_type, item_names, target=None):
@@ -139,38 +144,27 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name=f'Python ({rand_num})'))
 
 
-# @bot.event
-# async def on_reaction_add(reaction, usr):
-#     if len(bot.spk_his) > 0 and reaction.message.id == bot.spk_his[0].id and usr.id != bot.user.id:
-#         silk = '🧶'
-#         token = '🎖️'
-#         if reaction.emoji == silk or reaction.emoji == token:
-#             score = bot.auction.add_emoji(reaction.emoji, usr)
-#             await reaction.message.channel.send(f'{usr.mention}競標{"絲綢" if reaction.emoji == silk else "軍令"} ({score})')
-#
-#
-# @bot.event
-# async def on_reaction_remove(reaction, usr):
-#     if len(bot.spk_his) > 0 and reaction.message.id == bot.spk_his[0].id and usr.id != bot.user.id:
-#         silk = '🧶'
-#         token = '🎖️'
-#         if reaction.emoji == silk or reaction.emoji == token:
-#             bot.auction.remove_emoji(reaction.emoji, usr)
-
-
-async def command_checkup(ctx, msg, ba, command):
-    if len(msg) < 2:
-        await ctx.send(f'格式錯誤，用法範例：`{prefix_str}{command} -武將 曹操`\n請記得加上減字號與品名，然後不要打錯字！')
-        return -1
-    bid_type = msg[0]
-    if bid_type[0] != '-':
-        await ctx.send(f'格式錯誤，用法範例：`{prefix_str}{command} -武將 曹操`\n請記得加上減字號與品名，然後不要打錯字！')
-        return -1
-    bid_type = bid_type[1:]
-    if bid_type not in ba.attr_name_cn and bid_type not in [str(x) for x in range(len(ba.attr_name_cn))]:
-        await ctx.send(f'找不到類別：{bid_type}, 類別為 {", ".join(ba.attr_name_cn)}')
-        return -2
-    return 0
+async def command_checkup(ctx, msgs, command):
+    # split item list via type
+    try:
+        out_commands = []
+        st_index = 0
+        bid_types = []
+        for index, msg in enumerate(msgs):
+            if msg[0] == '-':
+                if index > 0:
+                    ed_index = index
+                    for bid_type in bid_types:
+                        out_commands.append([bid_type, list(msgs[st_index:ed_index])])
+                st_index = index + 1
+                bid_types = [int(msg[i:i + 1]) for i in range(1, len(msg))]
+        for bid_type in bid_types:
+            out_commands.append([bid_type, list(msgs[st_index:])])
+        return 0, out_commands
+    except:
+        ctx.send(f'格式錯誤，範例：\n 單物品：`/{command} -0 曹操`\n多物品：`/{command} -0 曹操 司馬懿`\n'
+                 f'多類別多物品：`/{command} -01 曹操 -34 和氏璧`')
+        return -1, None
 
 
 @bot.command()
@@ -178,15 +172,31 @@ async def remove(ctx, *msg):
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction
-    if await command_checkup(ctx, msg, ba, 'remove') != 0:
-        return
 
-    bid_type = msg[0][1:]
-    chk = ba.remove_bid(ctx, bid_type, msg[1:])
-    if chk == 0:
-        await ctx.invoke(bot.get_command('info'))
-    else:
-        await ctx.send(f'類別中無此物品：{msg[1]}')
+    err_code, commands = await command_checkup(ctx, msg, 'remove')
+
+    msg = list(msg)
+    if err_code == 0:
+        info_query = '-'
+        for command in commands:
+            info_query += f'{command[0]}'
+            bid_type = command[0]
+            item_table = ba.item_types[ba.num2attr(bid_type)]
+            item_list = []
+            removed_list = []
+            for item_name in command[1]:
+                if item_name not in item_table.keys():
+                    removed_list.append(item_name)
+                    command[1].pop(command[1].index(item_name))
+                else:
+                    item_list.append(item_name)
+            if len(removed_list) > 0:
+                await ctx.send(f'【{ba.num2attr_cn(bid_type)}】不存在物品: {", ".join(removed_list)}')
+            if len(item_list) > 0:
+                err_rm = ba.remove_bid(ctx, command[0], command[1])
+                if err_rm != 0:
+                    await ctx.send(f'H犬的糞code導致了未知原因的刪除失敗ㄛ!')
+        await ctx.invoke(bot.get_command('info'), arg_str=[info_query])
 
 
 async def f_check(msg, command):
@@ -252,12 +262,12 @@ async def add(ctx, *msg):
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction
-    if await command_checkup(ctx, msg, ba, 'add') != 0:
-        return
+    err_code, commands = await command_checkup(ctx, msg, 'add')
 
-    bid_type = msg[0][1:]
-    ba.add_bid(ctx, bid_type, msg[1:])
-    await ctx.invoke(bot.get_command('info'), f'-{bid_type}', msg[1:])
+    if err_code == 0:
+        for command in commands:
+            ba.add_bid(ctx, command[0], command[1])
+        await ctx.invoke(bot.get_command('info'), arg_str=msg)
 
 
 @bot.command()
@@ -283,7 +293,7 @@ async def dump(ctx):
         score = ba.score
         item_types = ba.item_types
         dump_mem = {}
-        for k in ['hero', 'hero_frag', 'weapon', 'weapon_frag']:
+        for k in ba.item_types.keys():
             bid_item = item_types[k]
             dump_mem[k] = {}
             for b in bid_item:
@@ -329,21 +339,25 @@ async def load(ctx, *msg):
             msg_index = 1 if msg[0] == '-rr' else msg_index
         de = fernet.decrypt(msg[msg_index].encode())
         dump_mem = json.loads(de)
-        for k in ['hero', 'hero_frag', 'weapon', 'weapon_frag']:
-            bid_items = dump_mem[k]
-            for bid_item in bid_items:
-                if bid_item not in ba.item_types[k].keys():
-                    ba.item_types[k][bid_item] = []
-                if bid_item not in ba.score[k].keys():
-                    ba.score[k][bid_item] = {}
-                for bidder_id, score in bid_items[bid_item]:
-                    bidder = ctx.guild.get_member(bidder_id)
-                    if bidder is None:
-                        bidder = bot.get_user(bidder_id)
-                    if bidder is None:
-                        bidder = await bot.fetch_user(bidder_id)
-                    ba.item_types[k][bid_item].append(bidder)
-                    ba.score[k][bid_item][bidder] = int(random.random() * 10000) if reroll else score
+        for k in ba.item_types.keys():
+            if k in dump_mem.keys():
+                bid_items = dump_mem[k]
+                for bid_item in bid_items:
+                    if bid_item not in ba.item_types[k].keys():
+                        ba.item_types[k][bid_item] = []
+                    if bid_item not in ba.score[k].keys():
+                        ba.score[k][bid_item] = {}
+                    for bidder_id, score in bid_items[bid_item]:
+                        bidder = ctx.guild.get_member(bidder_id)
+                        if bidder is None:
+                            bidder = bot.get_user(bidder_id)
+                        if bidder is None:
+                            bidder = await bot.fetch_user(bidder_id)
+                        ba.item_types[k][bid_item].append(bidder)
+                        ba.score[k][bid_item][bidder] = int(random.random() * 10000) if reroll else score
+            else:
+                ba.item_types[k] = {}
+                ba.score[k] = {}
         await ctx.invoke(bot.get_command('info'))
         await ctx.message.delete()
     else:
@@ -361,7 +375,7 @@ async def howtouse(ctx):
 
 
 @bot.command()
-async def info(ctx, *args):
+async def info(ctx, *args, arg_str=None):
     """
     :param args: -<info_type> <item_name>
     if <info_type> == -1 -> print all
@@ -376,25 +390,31 @@ async def info(ctx, *args):
                 await msg.delete()
             except :
                 print('Message not found in channel.')
+    if len(args) == 0 and arg_str is not None:
+        args = arg_str
 
+    query = {}
     args = list(args)
     if len(args) > 0:
         # check format
-        if args[0][0] != '-':
-            await ctx.send(f'用法錯誤，請依照以下格式：`/info -<type> <item_name:optional>`。\n舉例：`/info -0 曹操`')
-            return -1
-        args[0] = int(args[0][1:])
-        if len(args) >= 2:
-            if type(args[1]) is str:
-                args[1] = [args[1]]
-            for item_name in args[1]:
-                if item_name not in ba.item_types[ba.num2attr(args[0])].keys():
-                    await ctx.send(f'該類別查無此物品: {item_name}!')
-                    return -1
+        query_head = []
+        for index, s in enumerate(args):
+            if s[0] == '-':
+                query_head = []
+                if s[1] == '-':
+                    query = int(s[1:])
+                else:
+                    for q in s[1:]:
+                        q = int(q)
+                        query_head.append(q)
+                        query[q] = []
+            else:
+                for q in query_head:
+                    query[q].append(s)
     else:
-        args = [-1]
+        query = -1
 
-    m = await ctx.send(embed=bot.auction.get_embed_msg(args))
+    m = await ctx.send(embed=bot.auction.get_embed_msg(query))
     bot.spk_his = [m]
 
 
@@ -409,7 +429,7 @@ if __name__ == '__main__':
     modes = ['-local', '-remote', '-dev']
     mode = modes.index(mode)
     token_file = './token' if mode < 2 else 'token-dev'
-    if mode == 2:
+    if mode == 1:
         import keep_alive
         keep_alive.keep_alive()
     token = utils.read_token(token_file)
