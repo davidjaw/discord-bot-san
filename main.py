@@ -22,13 +22,14 @@ class Auction(object):
     def __init__(self, ctx):
         self.channel = ctx.channel
         self.bot_msgs = []
-        self.attr_name_en = ['hero', 'hero_frag', 'weapon', 'weapon_frag']
-        self.attr_name_cn = ['武將', '武將碎片', '神兵', '神兵碎片']
+        self.attr_name_en = ['hero', 'hero_frag', 'weapon', 'weapon_frag', 'soul']
+        self.attr_name_cn = ['武將', '武將碎片', '神兵', '神兵碎片', '將魂']
         self.item_types = {
             'hero': {},
             'hero_frag': {},
             'weapon': {},
             'weapon_frag': {},
+            'soul': {},
             'token': [],
             'silk': [],
         }
@@ -43,9 +44,10 @@ class Auction(object):
         return self.attr_name_cn.index(string)
 
     def get_embed_msg(self, args=None):
+        type_descriptions = [f'`{s}({i})`' for i, s in enumerate(self.attr_name_cn)]
         description = '參與拍賣: `/add -武將 曹操` 或用編號 `/add -0 曹操`，請注意不要打錯字!\n' \
                       '刪除拍賣: `/remove -武將 曹操` 或用編號 `/remove -0 曹操`\n' \
-                      '(類別說明 `0` = `武將`，`1` = `武將碎片`，`2` = `神兵`，`3` = `神兵碎片`\n' \
+                      f'- 類別說明: {", ".join(type_descriptions)}\n' \
                       '絲綢(🧶)、軍令(🎖️)每天會在 <#1028281656739647498> <#1028281627723452516> 頻道用抽取的\n\n' \
                       '**管理員指令**\n' \
                       '重置拍賣：\n`/clear`或`/reset`，需有管理身分組才能生效\n' \
@@ -401,7 +403,14 @@ async def auction_start(ctx):
     bot.auction = Auction(ctx)
     await ctx.invoke(bot.get_command('info'))
 
-DEV = False if len(sys.argv) == 1 else True
-token_file = './token' if not DEV else './token-dev'
-token = utils.read_token(token_file)
-bot.run(token)
+
+if __name__ == '__main__':
+    mode = '-local' if len(sys.argv) == 1 else sys.argv[1]
+    modes = ['-local', '-remote', '-dev']
+    mode = modes.index(mode)
+    token_file = './token' if mode < 2 else 'token-dev'
+    if mode == 2:
+        import keep_alive
+        keep_alive.keep_alive()
+    token = utils.read_token(token_file)
+    bot.run(token)
