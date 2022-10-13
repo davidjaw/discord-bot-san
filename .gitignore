@@ -2,3 +2,6 @@
 __pycache__
 token*
 data.json-*
+venv*
+.replit
+replit*
