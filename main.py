@@ -182,6 +182,29 @@ async def command_checkup(ctx, msgs, command):
 
 
 @bot.command()
+async def removeall(ctx, p_mention=None):
+    if bot.auction is None:
+        bot.auction = Auction(ctx)
+    ba = bot.auction
+    if p_mention is None:
+        p_mention = ctx.author.mention
+
+    for bid_type in ba.item_types:
+        item_list = ba.item_types[bid_type]
+        remove_list = []
+        target = None
+        for item_name in item_list:
+            bidders = [x.mention for x in item_list[item_name]]
+            if p_mention in bidders:
+                p_index = bidders.index(p_mention)
+                target = item_list[item_name][p_index]
+                remove_list.append(item_name)
+        if len(remove_list) > 0:
+            ba.remove_bid(ctx, ba.attr2num(bid_type), remove_list, target=target)
+    await ctx.send(f'已經全部刪除 {p_mention} 的物品。')
+
+
+@bot.command()
 async def remove(ctx, *msg):
     if bot.auction is None:
         bot.auction = Auction(ctx)
