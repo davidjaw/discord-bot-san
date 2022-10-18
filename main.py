@@ -24,13 +24,9 @@ class Auction(object):
         self.bot_msgs = []
         self.attr_name_en = ['hero', 'hero_frag', 'weapon', 'weapon_frag', 'soul']
         self.attr_name_cn = ['武將', '武將碎片', '神兵', '神兵碎片', '將魂']
-        self.item_types = {
-            'hero': {},
-            'hero_frag': {},
-            'weapon': {},
-            'weapon_frag': {},
-            'soul': {},
-        }
+        self.item_types = {}
+        for name in self.attr_name_en:
+            self.item_types[name] = {}
         self.score = {}
         for k in self.item_types.keys():
             self.score[k] = {}
@@ -42,9 +38,27 @@ class Auction(object):
         return self.attr_name_cn[num]
 
     def attr2num(self, string):
+        return self.attr_name_en.index(string)
+
+    def attr2num_cn(self, string):
         return self.attr_name_cn.index(string)
 
-    def get_embed_msg(self, args=None):
+    def show_cart(self, target):
+        query = {}
+        check = -1
+        for bid_type in self.item_types.keys():
+            item_list = self.item_types[bid_type]
+            positive_list = []
+            for item_name in item_list:
+                if target in item_list[item_name]:
+                    check = 0
+                    positive_list.append(item_name)
+            if len(positive_list) > 0:
+                query[self.attr2num(bid_type)] = positive_list
+        embed = self.get_embed_msg(args=query) if check == 0 else None
+        return check, embed
+
+    def get_embed_msg(self, args=None, bold_p=None):
         type_descriptions = [f'`{s}({i})`' for i, s in enumerate(self.attr_name_cn)]
         description = '參與拍賣: `/add -武將 曹操` 或用編號 `/add -0 曹操`，請注意不要打錯字!\n' \
                       '刪除拍賣: `/remove -武將 曹操` 或用編號 `/remove -0 曹操`\n' \
@@ -315,6 +329,19 @@ async def dump(ctx):
         await ctx.send(f'已將資料存到`{fn}`\n')
     else:
         await ctx.send('僅有管理員可以進行 `/dump`')
+
+
+@bot.command()
+async def mylist(ctx):
+    if bot.auction is None:
+        bot.auction = Auction(ctx)
+    ba = bot.auction
+
+    err_code, embed = ba.show_cart(ctx.author)
+    if err_code == 0:
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send('查詢結果：你屁都沒買ㄛ')
 
 
 @bot.command()
