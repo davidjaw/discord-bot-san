@@ -62,6 +62,8 @@ class Auction(object):
         type_descriptions = [f'`{s}({i})`' for i, s in enumerate(self.attr_name_cn)]
         description = '參與拍賣: `/add -武將 曹操` 或用編號 `/add -0 曹操`，請注意不要打錯字!\n' \
                       '刪除拍賣: `/remove -武將 曹操` 或用編號 `/remove -0 曹操`\n' \
+                      '查詢購物車：`/mylist`\n' \
+                      '清空購物車: `/removeall`\n' \
                       f'- 類別說明: {", ".join(type_descriptions)}\n' \
                       '絲綢(🧶)、軍令(🎖️)每天會在 <#1028281656739647498> <#1028281627723452516> 頻道用抽取的\n\n' \
                       '**管理員指令**\n' \
@@ -69,6 +71,7 @@ class Auction(object):
                       '強制增加拍賣：`/fadd -<type> <@people> <item_name>`\n' \
                       '強制刪除拍賣：`/fremove -<type> <@people> <item_name>`\n' \
                       '刪除整項拍賣物品：`/frmitem -<type> -<item_name>`    (還沒做)\n' \
+                      '強制刪除某人購物車：`/removeall <@people>\n' \
                       '輸出拍賣資料：`/dump`\n' \
                       '載入拍賣資料：`/load (optional: -rr) <STRING>`\n\n'
         if type(args) is int:
@@ -182,29 +185,6 @@ async def command_checkup(ctx, msgs, command):
 
 
 @bot.command()
-async def removeall(ctx, p_mention=None):
-    if bot.auction is None:
-        bot.auction = Auction(ctx)
-    ba = bot.auction
-    if p_mention is None:
-        p_mention = ctx.author.mention
-
-    for bid_type in ba.item_types:
-        item_list = ba.item_types[bid_type]
-        remove_list = []
-        target = None
-        for item_name in item_list:
-            bidders = [x.mention for x in item_list[item_name]]
-            if p_mention in bidders:
-                p_index = bidders.index(p_mention)
-                target = item_list[item_name][p_index]
-                remove_list.append(item_name)
-        if len(remove_list) > 0:
-            ba.remove_bid(ctx, ba.attr2num(bid_type), remove_list, target=target)
-    await ctx.send(f'已經全部刪除 {p_mention} 的物品。')
-
-
-@bot.command()
 async def remove(ctx, *msg):
     if bot.auction is None:
         bot.auction = Auction(ctx)
@@ -212,7 +192,6 @@ async def remove(ctx, *msg):
 
     err_code, commands = await command_checkup(ctx, msg, 'remove')
 
-    msg = list(msg)
     if err_code == 0:
         info_query = '-'
         for command in commands:
@@ -247,6 +226,34 @@ async def f_check(msg, command):
     if member is None:
         return -1, None, f'找不到目標: {msg[1]}'
     return 0, member, ''
+
+
+@bot.command()
+async def removeall(ctx, p_mention=None):
+    if bot.auction is None:
+        bot.auction = Auction(ctx)
+    ba = bot.auction
+    if p_mention is None:
+        p_mention = ctx.author.mention
+    elif not ctx.author.guild_permissions.administrator:
+        await ctx.send('僅有管理員可以進行 `/removeall <@people>`。')
+        return -1
+
+    recovery_str = ''
+    for bid_type in ba.item_types:
+        item_list = ba.item_types[bid_type]
+        remove_list = []
+        target = None
+        for item_name in item_list:
+            bidders = [x.mention for x in item_list[item_name]]
+            if p_mention in bidders:
+                p_index = bidders.index(p_mention)
+                target = item_list[item_name][p_index]
+                remove_list.append(item_name)
+        if len(remove_list) > 0:
+            ba.remove_bid(ctx, ba.attr2num(bid_type), remove_list, target=target)
+            recovery_str += f'-{ba.attr2num(bid_type)} {" ".join(remove_list)} '
+    await ctx.send(f'已經全部刪除 {p_mention} 的物品。\n復原請使用：`/add {recovery_str}`')
 
 
 @bot.command()
