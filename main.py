@@ -4,7 +4,7 @@ import discord
 import os
 import utils
 from discord.ext import commands
-from discord.utils import get
+from discord.ui import Select, View, Button
 import random
 import json
 import os
@@ -30,6 +30,12 @@ class Auction(object):
         self.score = {}
         for k in self.item_types.keys():
             self.score[k] = {}
+        self.menu_options = [
+            ['🛒', '購物車', '檢視自己目前的競標內容'],
+            ['🤏', '競標物品', '檢視競標物品的教學'],
+            ['📤', '刪除物品', '檢視刪除競標物品的教學'],
+            ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
+        ]
 
     def num2attr(self, num):
         return self.attr_name_en[num]
@@ -152,6 +158,52 @@ class Auction(object):
             else:
                 return -1
         return 0
+
+    async def btn_cb_refresh_cart(self, interaction):
+        user = interaction.user
+        err_code, user_cart = self.show_cart(target=user)
+        if err_code == 0:
+            await interaction.response.edit_message(embed=user_cart)
+        else:
+            await interaction.response.send_message('你的購物車是空的ㄛ!', ephemeral=True)
+
+    async def sel_callback(self, interaction):
+        res = interaction.response.send_message
+        user = interaction.user
+        selected_option = int(interaction.data['values'][0])
+        if selected_option == 0:
+            # check cart
+            button = Button(label='重新整理', emoji='🔄', style=discord.ButtonStyle.blurple)
+            button.callback = self.btn_cb_refresh_cart
+            view = View()
+            view.add_item(button)
+            err_code, user_cart = self.show_cart(target=user)
+            if err_code == 0:
+                await res(embed=user_cart, ephemeral=True, view=view)
+            else:
+                await res('你的購物車是空的ㄛ!', ephemeral=True)
+        elif selected_option == 1:
+            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.attr_name_cn)]
+            description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
+                          f'如果你想同時競標 `曹操` 的武將和武將碎片，可以打 `/add -01 曹操`\n' \
+                          f'也可以同時競標多個物品，如以下指令同時競標了【整個曹操、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'`/add -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
+                          f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
+                          f'最終會依照每個人的分數進行分配 (由大到小)'
+            embed = discord.Embed(title='增加拍賣物品教學', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        elif selected_option == 2:
+            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.attr_name_cn)]
+            description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
+                          f'如果你想同時刪除 `曹操` 的武將和武將碎片，可以打 `/remove -01 曹操`\n' \
+                          f'也可以同時競標多個物品，如以下指令同時刪除了【整個曹操、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'`/remove -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
+                          f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
+                          f'最終會依照每個人的分數進行分配 (由大到小)'
+            embed = discord.Embed(title='刪除拍賣物品教學', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        else:
+            await res('嘿，我啥也沒幹。', ephemeral=True)
 
 
 @bot.event
@@ -362,6 +414,26 @@ async def dump(ctx):
 
 
 @bot.command()
+async def menu(ctx):
+    if bot.auction is None:
+        bot.auction = Auction(ctx)
+    ba = bot.auction
+
+    helper_options = [discord.SelectOption(value=f'{i}', emoji=x[0], label=x[1], description=x[2])
+                      for i, x in enumerate(ba.menu_options)]
+    select = Select(
+        placeholder="🤖 點我開啟選單",
+        options=helper_options
+    )
+
+    select.callback = ba.sel_callback
+    view = View()
+    view.add_item(select)
+
+    await ctx.send("請點選動作選單⬇️", view=view)
+
+
+@bot.command()
 async def mylist(ctx):
     if bot.auction is None:
         bot.auction = Auction(ctx)
@@ -369,7 +441,7 @@ async def mylist(ctx):
 
     err_code, embed = ba.show_cart(ctx.author)
     if err_code == 0:
-        await ctx.send(embed=embed)
+        await ctx.send(embed=embed, ephemeral=True)
     else:
         await ctx.send('查詢結果：你屁都沒買ㄛ')
 
