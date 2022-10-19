@@ -3,6 +3,7 @@ import sys
 import discord
 import os
 import utils
+from datetime import datetime, timedelta
 from discord.ext import commands
 from discord.ui import Select, View, Button
 import random
@@ -32,8 +33,8 @@ class Auction(object):
             self.score[k] = {}
         self.menu_options = [
             ['🛒', '購物車', '檢視自己目前的競標內容'],
-            ['🤏', '競標物品', '檢視競標物品的教學'],
-            ['📤', '刪除物品', '檢視刪除競標物品的教學'],
+            ['🤏', '競標物品教學', '檢視競標物品的教學'],
+            ['📤', '刪除物品教學', '檢視刪除競標物品的教學'],
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
 
@@ -89,7 +90,7 @@ class Auction(object):
                 embed = discord.Embed(title='指令拍賣機器人', description=description, color=0x6f5dfe)
                 return embed
         else:
-            description = '使用說明請參考：`/howtouse` 或到 <#1027916438297645138>\n\n'
+            description = '使用說明請參考：`/menu` 或到 <#1027916438297645138>\n\n'
 
         embed = discord.Embed(title='指令拍賣機器人', description=description, color=0x6f5dfe)
         for item_type_num in sorted(args.keys()):
@@ -162,8 +163,10 @@ class Auction(object):
     async def btn_cb_refresh_cart(self, interaction):
         user = interaction.user
         err_code, user_cart = self.show_cart(target=user)
+        t = datetime.now() + timedelta(minutes=10)
+        msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
         if err_code == 0:
-            await interaction.response.edit_message(embed=user_cart)
+            await interaction.response.edit_message(content=msg, embed=user_cart)
         else:
             await interaction.response.send_message('你的購物車是空的ㄛ!', ephemeral=True)
 
@@ -173,13 +176,15 @@ class Auction(object):
         selected_option = int(interaction.data['values'][0])
         if selected_option == 0:
             # check cart
-            button = Button(label='重新整理', emoji='🔄', style=discord.ButtonStyle.blurple)
+            button = Button(label='重新整理', emoji='🔥', style=discord.ButtonStyle.gray)
             button.callback = self.btn_cb_refresh_cart
-            view = View()
+            view = View(timeout=60 * 10)
             view.add_item(button)
             err_code, user_cart = self.show_cart(target=user)
+            t = datetime.now() + timedelta(minutes=10)
+            msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
             if err_code == 0:
-                await res(embed=user_cart, ephemeral=True, view=view)
+                await res(msg, embed=user_cart, ephemeral=True, view=view)
             else:
                 await res('你的購物車是空的ㄛ!', ephemeral=True)
         elif selected_option == 1:
@@ -203,7 +208,7 @@ class Auction(object):
             embed = discord.Embed(title='刪除拍賣物品教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
         else:
-            await res('嘿，我啥也沒幹。', ephemeral=True)
+            await res('嘿，我啥也沒幹🤷‍♂️。', ephemeral=True)
 
 
 @bot.event
@@ -403,7 +408,6 @@ async def dump(ctx):
         en = fernet.encrypt(json_string.encode()).decode()
         fn = 'data.json'
         if os.path.exists(fn):
-            from datetime import datetime
             t = datetime.now()
             os.rename(fn, fn + f'-{t.strftime("%Y%m%d-%H%M%S")}')
         with open('data.json', 'w') as f:
@@ -430,7 +434,9 @@ async def menu(ctx):
     view = View()
     view.add_item(select)
 
-    await ctx.send("請點選動作選單⬇️", view=view)
+    del_time = datetime.now() + timedelta(minutes=10)
+    menu_msg = f"野生的機器人跳出來啦! (將於`{del_time.strftime('%H:%M:%S')}`自動刪除此訊息) ⬇️"
+    await ctx.send(menu_msg, view=view, delete_after=10 * 60)
 
 
 @bot.command()
@@ -545,12 +551,6 @@ async def info(ctx, *args, arg_str=None):
 
     m = await ctx.send(embed=bot.auction.get_embed_msg(query))
     bot.spk_his = [m]
-
-
-@bot.command()
-async def auction_start(ctx):
-    bot.auction = Auction(ctx)
-    await ctx.invoke(bot.get_command('info'))
 
 
 if __name__ == '__main__':
