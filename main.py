@@ -101,7 +101,13 @@ class Auction(object):
             if len(item_type.keys()) == 0:
                 item_description += ' (尚無)'
             else:
+                flag = False
                 for k in args[item_type_num]:
+                    if k not in item_type.keys():
+                        flag = flag or False
+                        continue
+                    else:
+                        flag = True
                     bidders = item_type[k]
                     # sort bidder via its score
                     bidder_scores = [self.score[self.num2attr(item_type_num)][k][x] for x in bidders]
@@ -113,6 +119,8 @@ class Auction(object):
                     item_description += f'【({len(bidders)}人) {k}】\n'
                     for p_idx, p in enumerate(bidders):
                         item_description += f'{p.display_name} - {bidder_scores[p_idx]}{"" if p_idx == len(bidders) - 1 else ", "}\n'
+                if not flag:
+                    item_description += ' (尚無)'
 
             embed.add_field(name=f'{item_type_num}-{self.attr_name_cn[item_type_num]}', value=item_description, inline=True)
         return embed
