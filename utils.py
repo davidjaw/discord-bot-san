@@ -20,13 +20,24 @@ class Bid(object):
     def __init__(self, person, target, category, score=-1):
         self.person: discord.Member
         self.target: str
-        self.category: int
+        self.category: str
 
         self.score = score if score >= 0 else get_random_score()
         self.person = person
         self.target = target
         self.category = category
         self.valid: bool = True
+
+    def __repr__(self):
+        return f'Bid: <target: {self.target}, person: {self.person}, valid: {self.valid}>'
+
+    def __eq__(self, other):
+        if type(other) is str:
+            return other == self.target
+        elif type(other) is discord.Member:
+            return other == self.person
+        elif type(other) is int:
+            return self.person == other
 
 
 class Auction(object):
@@ -42,25 +53,64 @@ class Auction(object):
         ]
         self.bids: [[Bid]] = [[] for _ in self.item_types]
 
-    def add_bid(self, item_type: int, item_name: str, person: discord.Member, score: int = -1):
-        if item_type >= len(self.item_types):
+    def attr2num(self, attr_name):
+        if attr_name in self.item_types:
+            return self.item_types.index(attr_name)
+        elif attr_name in self.item_types_cn:
+            return self.item_types_cn.index(attr_name)
+        else:
+            return -1
+
+    def qstr2q(self, query_str: str) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
+        # convert query string to query dictionary
+        result = {}
+        queries = list(filter(lambda x: x != '', query_str.split('-')))
+        for type_query_str in queries:
+            q = list(filter(lambda x: x != '', type_query_str.split(' ')))
+            for t in q[0]:
+                t = int(t)
+                if t not in result.keys():
+                    result[t] = []
+                for item_name in q[1:]:
+                    result[t].append(item_name)
+        return self.chk_query(result)
+
+    def chk_query(self, args: Dict[int, List[str]]) -> (int, Dict[int, List[str]]):
+        non_exist_items = {}
+        result = {}
+        for item_type in args.keys():
+            target_item_names = args[item_type]
+            if item_type >= len(self.item_types):
+                return -1, '不存在該類別'
+            items = self.bids[item_type]
+            result[item_type] = []
+            non_exist_items[item_type] = []
+            for target_item in target_item_names:
+                if target_item not in items:
+                    non_exist_items[item_type].append(target_item)
+                else:
+                    result[item_type].append(target_item)
+            if len(result[item_type]) == 0:
+                del result[item_type]
+        return 0, '', non_exist_items, result
+
+    def add_bid(self, item_type: str, item_name: str, person: discord.Member, score: int = -1):
+        if item_type not in self.item_types:
             return -1
         bid = Bid(person, item_name, item_type, score)
-        self.bids[item_type].append(bid)
+        self.bids[self.attr2num(item_type)].append(bid)
+        return 0
 
-    def remove_bids(self, item_type: int, item_names: List[str], person: discord.Member):
-        if item_type >= len(self.item_types):
-            return -1
+    def remove_bids(self, item_types: List[int], item_names: List[str], person: discord.Member):
         # remove items
         non_ext_name = []
         removed_name = []
-        type_items = self.bids[item_type]
-        for item_name in item_names:
-            if item_name not in type_items:
-                non_ext_name.append(item_name)
-                continue
 
-    def query(self, args: Dict[int, List[discord.Member]]) -> (int, Dict[int, List[Bid]]):
+        for item_type in item_types:
+            type_items = self.bids[item_type]
+            p_cart = list(filter(lambda x: x.person == person, type_items))
+
+    def query(self, args: Dict[int, List[str]]) -> (int, Dict[int, Dict[str, List[Bid]]]):
         target_types: List[int] = sorted(args.keys())
         result = {}
         for item_type in target_types:
@@ -69,9 +119,10 @@ class Auction(object):
                 return -1, None
             item_names = args[item_type]
             bids = self.bids[item_type]
+            result[item_type] = {}
             for item_name in item_names:
                 item_bids = list(filter(lambda x: x.target == item_name, bids))
-                result[item_type] = item_bids
+                result[item_type][item_name] = item_bids
 
         return 0, result
 
@@ -84,16 +135,16 @@ class Auction(object):
         de = fernet.decrypt(content.encode())
         dump_mem = json.loads(de)
 
-        result = [[] for _ in self.item_types]
         for k in dump_mem.keys():
             if k not in self.item_types:
                 return -1, f'key {k} not in defined type {self.item_types}'
-            item_type = self.item_types.index(k)
             bid_items = dump_mem[k]
             for bid_item in bid_items:
                 bidders = bid_items[bid_item]
                 for bidder_id, bidder_score in bidders:
-                    self.add_bid(item_type, bid_item, bidder_id, -1 if reroll else bidder_score)
+                    err_code = self.add_bid(k, bid_item, bidder_id, -1 if reroll else bidder_score)
+                    if err_code == -1:
+                        return err_code
 
 
 if __name__ == '__main__':
@@ -103,6 +154,9 @@ if __name__ == '__main__':
     auc = Auction()
     auc.load(False)
     print()
+
+    auc.qstr2q('-01 1 2 3 -23 1 2 3 -1 4')
+
 
     # intents = discord.Intents.default()
     # intents.message_content = True
