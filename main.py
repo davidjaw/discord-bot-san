@@ -35,6 +35,7 @@ class Auction(object):
             ['🛒', '購物車', '檢視自己目前的競標內容'],
             ['🤏', '競標物品教學', '檢視競標物品的教學'],
             ['📤', '刪除物品教學', '檢視刪除競標物品的教學'],
+            ['⏲️', '經驗計算教學', '檢視如何使用經驗計算指令'],
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
 
@@ -214,6 +215,15 @@ class Auction(object):
                           f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
                           f'最終會依照每個人的分數進行分配 (由大到小)'
             embed = discord.Embed(title='刪除拍賣物品教學', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        elif selected_option == 3:
+            description = f'經驗計算的公式如下：\n' \
+                          f'掃盪獲得經驗 = 體力 * 等級；每日任務為 100 * 等級 * 14\n' \
+                          f'體力為 6 分鐘回復 1 點\n' \
+                          f'指令計算方法：`/lvchk <目前等級> <目前經驗>`\n' \
+                          f'舉例：目前 **60**等，當前經驗 *12345*：' \
+                          f'```/lvchk 60 12345```\n'
+            embed = discord.Embed(title='升等經驗計算教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
         else:
             await res('嘿，我啥也沒幹🤷‍♂️。', ephemeral=True)
@@ -448,6 +458,43 @@ async def menu(ctx):
 
 
 @bot.command()
+async def lvchk(ctx, *msg):
+    if len(msg) < 2:
+        await ctx.send('指令格式錯誤，請參考 `/menu` 中的教學。')
+        return
+    try:
+        level = int(msg[0])
+        cur_exp = int(msg[1])
+        cur_time = datetime.utcnow()
+        y, mm, d, h, m, s = [int(x) for x in cur_time.strftime('%Y,%m,%d,%H,%M,%S').split(',')]
+        utc_today = datetime(y, mm, d)
+        target_time = datetime(y, mm, d) + timedelta(hours=21)
+        if h > 21 or (h == 20 and m > 0):
+            target_time = target_time + timedelta(days=1)
+        remain_seconds = (target_time - cur_time).total_seconds()
+        tw_time = cur_time + timedelta(hours=8)
+        supply = 0
+        if cur_time < utc_today + timedelta(hours=12 - 8):
+            supply += 1
+        elif cur_time < utc_today + timedelta(hours=18 - 8):
+            supply += 1
+        remain_energy = int((remain_seconds / 60) // 6)
+        exp_energy = int((supply * 5 * 50 + remain_energy) // 5 * level * 5)
+        exp_quest = level * 100 * 14
+        content = f'{ctx.author.mention} 當前為 {level} 等，當前經驗為 {cur_exp:,}，假設體力目前為空\n' \
+                  f'當前時間為 {tw_time.strftime("%H:%M")}, 還有 {supply} 次糧食補給, ' \
+                  f'距離換日尚有 `{remain_seconds // 60:,.0f}` 分鐘\n' \
+                  f'預期剩餘體力： 補給次數 * 5 * 50 ({supply * 5 * 50:,}) + 剩餘時間 / 6分鐘 ({remain_energy}) ' \
+                  f'= `{remain_energy + supply * 5 * 50:,}`\n' \
+                  f'體力換算經驗：`{exp_energy:,}`, 每日任務經驗：`{exp_quest:,}`, 當前經驗：`{cur_exp:,}`\n' \
+                  f'加總為 `{exp_energy + exp_quest + cur_exp:,}` (換日前每早睡一小時扣除 `{2 * level * 5}`經驗)\n'
+        embed = discord.Embed(description=content, color=0x6f5dfe)
+        await ctx.send(embed=embed)
+    except:
+        await ctx.send('指令格式錯誤，請參考 `/menu` 中的教學。')
+
+
+@bot.command()
 async def mylist(ctx):
     if bot.auction is None:
         bot.auction = Auction(ctx)
@@ -455,7 +502,7 @@ async def mylist(ctx):
 
     err_code, embed = ba.show_cart(ctx.author)
     if err_code == 0:
-        await ctx.send(embed=embed, ephemeral=True)
+        await ctx.send('建議使用 `/menu` 才不會一直占用版面喔!', embed=embed, ephemeral=True)
     else:
         await ctx.send('查詢結果：你屁都沒買ㄛ')
 
