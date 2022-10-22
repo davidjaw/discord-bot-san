@@ -58,9 +58,10 @@ class Bid(object):
         return hash(self.person)
 
     def __eq__(self, other):
-        print(other)
         if type(other) is str:
             return other == self.target
+        elif isinstance(other, discord.Member):
+            return self.person == other
         elif isinstance(other, BidWrapper):
             return self.target == other.target and self.person == other.person
         elif isinstance(other, Bid):
@@ -234,6 +235,7 @@ class Auction(object):
 
     def op_rm_bid(self, item_type, item_name, person: discord.Member):
         items = self.bids[item_type]
+        items = list(filter(lambda x: x == person, items))
         items = list(filter(lambda x: item_name == x, items))
         items = list(filter(lambda x: x.valid, items))
         flag = False
@@ -245,26 +247,22 @@ class Auction(object):
 
     def remove_bid(self, query_str: str, person: discord.Member):
         err_code, err_msg, non_ext_items, exist_items = self.qstr2q(query_str)
-        if err_code == 0 or err_code == -2:
-            self.func_to_query(exist_items, self.op_rm_bid, person=person)
-            err_code = 0
+        self.func_to_query(exist_items, self.op_rm_bid, person=person)
         return err_code, err_msg, non_ext_items, exist_items
 
-    def query(self, args: Dict[int, List[str]]) -> (int, Dict[int, Dict[str, List[Bid]]]):
-        target_types: List[int] = sorted(args.keys())
-        result = {}
-        for item_type in target_types:
-            # check whether specified type exist
-            if item_type >= len(self.item_types):
-                return -1, None
-            item_names = args[item_type]
-            bids = self.bids[item_type]
-            result[item_type] = {}
-            for item_name in item_names:
-                item_bids = list(filter(lambda x: x.target == item_name, bids))
-                result[item_type][item_name] = item_bids
-
-        return 0, result
+    def remove_all(self, person: str) -> (int, str, Dict[int, Dict[str, List[Bid]]]):
+        revert_str = '/add '
+        for type_index in range(len(self.item_types)):
+            type_bids = self.bids[type_index]
+            flag = True
+            for bid in type_bids:
+                if person == bid.person.mention:
+                    if flag:
+                        revert_str += f' -{type_index}'
+                        flag = False
+                    revert_str += f' {bid.target}'
+                    bid.set_valid(False)
+        return revert_str
 
     def load(self, reroll: bool):
         from cryptography.fernet import Fernet

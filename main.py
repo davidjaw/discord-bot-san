@@ -43,19 +43,20 @@ async def remove(ctx, *args):
         await ctx.send(f'刪除成功，可以透過 `/menu` 確認當前的購買清單ㄛ!')
     else:
         embed = ba.auction_info(ba.q2qstr(err_q))
-        await ctx.send(f'有錯誤發生，以下物品不存在：', embed=embed)
+        await ctx.send(f'有錯誤發生，但已刪除指定且存在之物品，請使用 `/menu` 確認', embed=embed)
 
 
 @bot.command()
 async def removeall(ctx, p_mention=None):
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send('僅有管理員可以進行 `/removeall <@people>`。')
+        return -1
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction
-    if p_mention is None:
-        p_mention = ctx.author.mention
-    elif not ctx.author.guild_permissions.administrator:
-        await ctx.send('僅有管理員可以進行 `/removeall <@people>`。')
-        return -1
+    p_mention = ctx.author.mention if p_mention is None else p_mention
+    revert_str = ba.remove_all(p_mention)
+    await ctx.send(f'已經刪除{p_mention}的全部競標資料，可使用以下指令復原：```{revert_str}```')
 
 
 @bot.command()
