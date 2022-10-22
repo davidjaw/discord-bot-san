@@ -76,23 +76,38 @@ class Auction(object):
         return self.chk_query(result)
 
     def chk_query(self, args: Dict[int, List[str]]) -> (int, Dict[int, List[str]]):
+        """
+        return format:
+            error code,
+            error query,
+        """
+        error_msg = {
+            0: 'Success',
+            -1: '指令中有不存在的物品類別',
+            -2: '指令中有不存在的物品',
+            -3: '指令中有不存在類別和物品'
+        }
+        error_code = 0
         non_exist_items = {}
         result = {}
         for item_type in args.keys():
             target_item_names = args[item_type]
             if item_type >= len(self.item_types):
-                return -1, '不存在該類別'
+                error_code = -1 if error_code >= -1 else -3
+                non_exist_items[item_type] = args[item_type]
+                continue
             items = self.bids[item_type]
             result[item_type] = []
             non_exist_items[item_type] = []
             for target_item in target_item_names:
                 if target_item not in items:
                     non_exist_items[item_type].append(target_item)
+                    error_code = -1 if error_code >= -1 else -3
                 else:
                     result[item_type].append(target_item)
             if len(result[item_type]) == 0:
                 del result[item_type]
-        return 0, '', non_exist_items, result
+        return error_code, error_msg[error_code], non_exist_items, result
 
     def add_bid(self, item_type: str, item_name: str, person: discord.Member, score: int = -1):
         if item_type not in self.item_types:
