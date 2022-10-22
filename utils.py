@@ -2,6 +2,8 @@ from typing import List, Any, Dict
 import json
 import random
 import discord
+from datetime import datetime, timedelta
+from discord.ui import Select, View, Button
 import os
 
 
@@ -27,6 +29,7 @@ class Bid(object):
         self.target = target
         self.category = category
         self.valid: bool = True
+        self.late: bool = False
 
     def set_valid(self, setup: bool):
         self.valid = setup
@@ -37,7 +40,8 @@ class Bid(object):
             'target': self.target,
             'category': self.category,
             'score': self.score,
-            'valid': self.valid
+            'valid': self.valid,
+            'late': self.late,
         }
         return my_dict
 
@@ -49,12 +53,24 @@ class Bid(object):
             return other == self.target
         elif type(other) is discord.Member:
             return other == self.person
-        elif type(other) is int:
-            return self.person == other
+        elif isinstance(other, Bid):
+            return self.score == other.score
+
+    def __lt__(self, other):
+        if isinstance(other, Bid):
+            return self.score < other.score
+
+    def __gt__(self, other):
+        if isinstance(other, Bid):
+            return self.score > other.score
+
+    def __le__(self, other):
+        if isinstance(other, Bid):
+            return self.score <= other.score
 
 
 class Auction(object):
-    def __init__(self):
+    def __init__(self, ctx):
         self.item_types_cn: List[str] = ['武將', '武將碎片', '神兵', '神兵碎片', '將魂']
         self.item_types: List[str] = ['hero', 'hero_frag', 'weapon', 'weapon_frag', 'soul']
         self.menu_options: List[List[str]] = [
@@ -65,6 +81,7 @@ class Auction(object):
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
         self.bids: List[List[Bid]] = [[] for _ in self.item_types]
+        self.ctx = ctx
 
     def attr2num(self, attr_name):
         if attr_name in self.item_types:
@@ -73,6 +90,9 @@ class Auction(object):
             return self.item_types_cn.index(attr_name)
         else:
             return -1
+
+    def num2attr(self, num: int, cn = True):
+        return self.item_types_cn[num] if cn else self.item_types[num]
 
     def qstr2q(self, query_str: str) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
         # convert query string to query dictionary
@@ -120,6 +140,32 @@ class Auction(object):
             if len(result[item_type]) == 0:
                 del result[item_type]
         return error_code, error_msg[error_code], non_exist_items, result
+
+    def op_auction_info(self, item_type, item_name, exist):
+        text = f'【{item_name}】\n'
+        if exist:
+            item_bids = list(filter(lambda x: item_name == x, self.bids[item_type]))
+            item_bids = list(filter(lambda x: x.valid, item_bids))
+            item_bids = sorted(item_bids)
+            item_bids = list(reversed(item_bids))
+            text += '\n'.join([f'{x.person.display_name} - {x.score}' for x in item_bids])
+        else:
+            text = f'【{item_name}】\n尚無\n'
+        return text
+
+    def auction_info(self, query_str: str):
+        err_code, err_str, non_item, res_item = self.qstr2q(query_str)
+        embed = discord.Embed(title='指令拍賣機器人', color=0x6f5dfe)
+        item_str = self.func_to_query(res_item, self.op_auction_info, exist=True)
+        beautifier = ['zero', 'one', 'two', 'three', 'four']
+        for k in sorted(res_item.keys()):
+            embed.add_field(name=f':{beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
+        item_str = self.func_to_query(non_item, self.op_auction_info, exist=False)
+        for k in sorted(res_item.keys()):
+            if len(non_item[k]) > 0:
+                embed.add_field(name=f'{self.num2attr(k)} ({k})', value='\n'.join(item_str[k]))
+        embed.set_footer(text='\n若有任何疑問或想追蹤競標狀況，請使用 /menu')
+        return embed
 
     def func_to_query(self, query: Dict[int, List[str]], func, **kwargs) -> Dict[int, List[Any]]:
         result = {}
@@ -195,6 +241,65 @@ class Auction(object):
                     err_code = self.add_bid(query_str, bidder_id, -1 if reroll else bidder_score)
                     if err_code == -1:
                         return err_code
+
+    async def btn_cb_refresh_cart(self, interaction):
+        user = interaction.user
+        err_code, user_cart = self.show_cart(target=user)
+        t = datetime.now() + timedelta(minutes=10)
+        msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
+        if err_code == 0:
+            await interaction.response.edit_message(content=msg, embed=user_cart)
+        else:
+            await interaction.response.send_message('你的購物車是空的ㄛ!', ephemeral=True)
+
+    async def sel_callback(self, interaction):
+        res = interaction.response.send_message
+        user = interaction.user
+        selected_option = int(interaction.data['values'][0])
+        if selected_option == 0:
+            # check cart
+            button = Button(label='重新整理', emoji='🔥', style=discord.ButtonStyle.gray)
+            button.callback = self.btn_cb_refresh_cart
+            view = View(timeout=60 * 10)
+            view.add_item(button)
+            err_code, user_cart = self.show_cart(target=user)
+            t = datetime.now() + timedelta(minutes=10)
+            msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
+            if err_code == 0:
+                await res(msg, embed=user_cart, ephemeral=True, view=view)
+            else:
+                await res('你的購物車是空的ㄛ!', ephemeral=True)
+        elif selected_option == 1:
+            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.attr_name_cn)]
+            description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
+                          f'如果你想同時競標 `曹操` 的武將和武將碎片，可以打 `/add -01 曹操`\n' \
+                          f'也可以同時競標多個物品，如以下指令同時競標了【整個曹操、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'`/add -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
+                          f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
+                          f'最終會依照每個人的分數進行分配 (由大到小)'
+            embed = discord.Embed(title='增加拍賣物品教學', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        elif selected_option == 2:
+            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.attr_name_cn)]
+            description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
+                          f'如果你想同時刪除 `曹操` 的武將和武將碎片，可以打 `/remove -01 曹操`\n' \
+                          f'也可以同時競標多個物品，如以下指令同時刪除了【整個曹操、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'`/remove -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
+                          f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
+                          f'最終會依照每個人的分數進行分配 (由大到小)'
+            embed = discord.Embed(title='刪除拍賣物品教學', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        elif selected_option == 3:
+            description = f'經驗計算的公式如下：\n' \
+                          f'掃盪獲得經驗 = 體力 * 等級；每日任務為 100 * 等級 * 14\n' \
+                          f'體力為 6 分鐘回復 1 點\n' \
+                          f'指令計算方法：`/lvchk <目前等級> <目前經驗>`\n' \
+                          f'舉例：目前 **60**等，當前經驗 *12345*：' \
+                          f'```/lvchk 60 12345```\n'
+            embed = discord.Embed(title='升等經驗計算教學', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        else:
+            await res('嘿，我啥也沒幹🤷‍♂️。', ephemeral=True)
 
 
 if __name__ == '__main__':
