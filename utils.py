@@ -28,8 +28,21 @@ class Bid(object):
         self.category = category
         self.valid: bool = True
 
+    def set_valid(self, setup: bool):
+        self.valid = setup
+
+    def to_dict(self):
+        my_dict = {
+            'person': self.person.id,
+            'target': self.target,
+            'category': self.category,
+            'score': self.score,
+            'valid': self.valid
+        }
+        return my_dict
+
     def __repr__(self):
-        return f'Bid: <target: {self.target}, person: {self.person}, valid: {self.valid}>'
+        return f'Bid: <target: {self.target}, person: {self.person}, valid: {self.valid}, score: {self.score}>'
 
     def __eq__(self, other):
         if type(other) is str:
@@ -51,7 +64,7 @@ class Auction(object):
             ['⏲️', '經驗計算教學', '檢視如何使用經驗計算指令'],
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
-        self.bids: [[Bid]] = [[] for _ in self.item_types]
+        self.bids: List[List[Bid]] = [[] for _ in self.item_types]
 
     def attr2num(self, attr_name):
         if attr_name in self.item_types:
@@ -75,11 +88,10 @@ class Auction(object):
                     result[t].append(item_name)
         return self.chk_query(result)
 
-    def chk_query(self, args: Dict[int, List[str]]) -> (int, Dict[int, List[str]]):
+    def chk_query(self, args: Dict[int, List[str]]) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
         """
         return format:
-            error code,
-            error query,
+            error_code, error_msg, error_query, success_query
         """
         error_msg = {
             0: 'Success',
@@ -102,19 +114,40 @@ class Auction(object):
             for target_item in target_item_names:
                 if target_item not in items:
                     non_exist_items[item_type].append(target_item)
-                    error_code = -1 if error_code >= -1 else -3
+                    error_code = -2 if error_code >= -2 else -3
                 else:
                     result[item_type].append(target_item)
             if len(result[item_type]) == 0:
                 del result[item_type]
         return error_code, error_msg[error_code], non_exist_items, result
 
-    def add_bid(self, item_type: str, item_name: str, person: discord.Member, score: int = -1):
-        if item_type not in self.item_types:
-            return -1
-        bid = Bid(person, item_name, item_type, score)
-        self.bids[self.attr2num(item_type)].append(bid)
-        return 0
+    def func_to_query(self, query: Dict[int, List[str]], func, **kwargs) -> Dict[int, List[Any]]:
+        result = {}
+        for t in query.keys():
+            t_list = query[t]
+            result[t] = []
+            for t_item in t_list:
+                result[t].append(func(t, t_item, **kwargs))
+        return result
+
+    def op_add_bid(self, item_type, item_name, **kwargs):
+        bidder = kwargs['person']
+        if bidder in self.bids[item_type]:
+            bid = self.bids[item_type][self.bids[item_type].index(bidder)]
+            bid.set_valid(True)
+        else:
+            bid = Bid(person=bidder, target=item_name, category=item_type, score=kwargs['score'])
+            self.bids[item_type].append(bid)
+        return bid
+
+    def add_bid(self, query_str: str, person: discord.Member, score: int = -1) \
+            -> (int, str, Dict[int, List[str]]):
+        err_code, err_msg, non_ext_items, exist_items = self.qstr2q(query_str)
+        if err_code == 0 or err_code == -2:
+            self.func_to_query(non_ext_items, self.op_add_bid, score=score, person=person)
+            self.func_to_query(exist_items, self.op_add_bid, score=score, person=person)
+            err_code = 0
+        return err_code
 
     def remove_bids(self, item_types: List[int], item_names: List[str], person: discord.Member):
         # remove items
@@ -157,7 +190,9 @@ class Auction(object):
             for bid_item in bid_items:
                 bidders = bid_items[bid_item]
                 for bidder_id, bidder_score in bidders:
-                    err_code = self.add_bid(k, bid_item, bidder_id, -1 if reroll else bidder_score)
+                    type_index = self.attr2num(k)
+                    query_str = f'-{type_index} {bid_item}'
+                    err_code = self.add_bid(query_str, bidder_id, -1 if reroll else bidder_score)
                     if err_code == -1:
                         return err_code
 
@@ -170,7 +205,7 @@ if __name__ == '__main__':
     auc.load(False)
     print()
 
-    auc.qstr2q('-01 1 2 3 -23 1 2 3 -1 4')
+    auc.add_bid('-01 郭嘉 2 3 -23 1 弓 2 3 -1 4', 123456789)
 
 
     # intents = discord.Intents.default()
