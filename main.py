@@ -29,10 +29,21 @@ async def on_ready():
 
 
 @bot.command()
-async def remove(ctx, *msg):
+async def remove(ctx, *args):
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction
+
+    q_str = ' '.join(args)
+    if ba.querystr_fmt_chk(q_str) != 0:
+        await ctx.send('格式錯誤，使用說明請參考 `/menu`')
+        return -1
+    err_code, err_str, err_q, res_q = ba.remove_bid(q_str, ctx.author)
+    if err_code == 0:
+        await ctx.send(f'刪除成功，可以透過 `/menu` 確認當前的購買清單ㄛ!')
+    else:
+        embed = ba.auction_info(ba.q2qstr(err_q))
+        await ctx.send(f'有錯誤發生，以下物品不存在：', embed=embed)
 
 
 @bot.command()
@@ -80,12 +91,16 @@ async def add(ctx: discord.ext.commands.Context, *msg):
     ba = bot.auction
 
     query_str = ' '.join(msg)
-    err_code = ba.add_bid(query_str, ctx.author)
+    if ba.querystr_fmt_chk(query_str) != 0:
+        await ctx.send('格式錯誤，使用說明請參考 `/menu`')
+        return -1
+    err_code, err_str, err_q, res_q = ba.add_bid(query_str, ctx.author)
     if err_code == 0:
         embed = ba.auction_info(query_str)
         await ctx.send(embed=embed)
     else:
-        await ctx.send(f'{code_author} 寫的糞 code 導致了不明原因加入失敗!')
+        embed = ba.auction_info(ba.q2qstr(err_q))
+        await ctx.send(embed=embed)
 
 
 @bot.command()
@@ -194,11 +209,6 @@ async def lvchk(ctx, *msg):
 
 
 @bot.command()
-async def mylist(ctx):
-    await ctx.send('查詢購買清單請使用 `/menu` 指令再選擇購物車ㄛ!')
-
-
-@bot.command()
 async def load(ctx, *msg):
     roles = []
     if ctx.author.guild_permissions.administrator:
@@ -216,14 +226,24 @@ async def clear(ctx):
 
 
 @bot.command()
-async def info(ctx, *args, arg_str=None):
-    """
-    :param args: -<info_type> <item_name>
-    if <info_type> == -1 -> print all
-    """
+async def info(ctx, *args):
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction
+
+    query_str = ' '.join(args)
+    chk = ba.querystr_fmt_chk(query_str)
+    if len(args) < 2 or chk != 0:
+        await ctx.send(f'格式錯誤：請輸入欲查詢之類別或武將\n'
+                       f'**若要查看`使用說明`或完整競拍資訊，請使用 `/menu`**')
+        return
+    embed = ba.auction_info(query_str)
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def mylist(ctx):
+    await ctx.send('查詢購買清單請使用 `/menu` 指令再選擇購物車ㄛ!')
 
 
 if __name__ == '__main__':

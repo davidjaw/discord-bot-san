@@ -18,6 +18,12 @@ def get_random_score():
     return int(random_num * 10000)
 
 
+class BidWrapper(object):
+    def __init__(self, person: discord.Member, target: str):
+        self.person = person
+        self.target = target
+
+
 class Bid(object):
     def __init__(self, person, target, category, score=-1):
         self.person: discord.Member
@@ -48,13 +54,17 @@ class Bid(object):
     def __repr__(self):
         return f'Bid: <target: {self.target}, person: {self.person}, valid: {self.valid}, score: {self.score}>'
 
+    def __hash__(self):
+        return hash(self.person)
+
     def __eq__(self, other):
+        print(other)
         if type(other) is str:
             return other == self.target
-        elif type(other) is discord.Member:
-            return other == self.person
+        elif isinstance(other, BidWrapper):
+            return self.target == other.target and self.person == other.person
         elif isinstance(other, Bid):
-            return self.score == other.score
+            return self.score == other.score and self.person == self.person and self.target == self.target
 
     def __lt__(self, other):
         if isinstance(other, Bid):
@@ -93,6 +103,22 @@ class Auction(object):
 
     def num2attr(self, num: int, cn = True):
         return self.item_types_cn[num] if cn else self.item_types[num]
+
+    @staticmethod
+    def querystr_fmt_chk(query_str: str):
+        if query_str[0] != '-':
+            return -1
+        return 0
+
+    @staticmethod
+    def q2qstr(q: Dict[int, List[str]]) -> str:
+        result = ''
+        for k in q.keys():
+            result += f'-{k} '
+            items = q[k]
+            for item in items:
+                result += f'{item} '
+        return result
 
     def qstr2q(self, query_str: str) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
         # convert query string to query dictionary
@@ -134,11 +160,13 @@ class Auction(object):
             for target_item in target_item_names:
                 if target_item not in items:
                     non_exist_items[item_type].append(target_item)
-                    error_code = -2 if error_code >= -2 else -3
+                    error_code = -2 if error_code == 0 or error_code == -2 else -3
                 else:
                     result[item_type].append(target_item)
             if len(result[item_type]) == 0:
                 del result[item_type]
+            if len(non_exist_items[item_type]) == 0:
+                del non_exist_items[item_type]
         return error_code, error_msg[error_code], non_exist_items, result
 
     def op_auction_info(self, item_type, item_name, exist):
@@ -150,21 +178,27 @@ class Auction(object):
             item_bids = list(reversed(item_bids))
             text += '\n'.join([f'{x.person.display_name} - {x.score}' for x in item_bids])
         else:
-            text = f'【{item_name}】\n尚無\n'
+            text = f'【{item_name}】\n目前無人競標\n'
         return text
 
     def auction_info(self, query_str: str):
         err_code, err_str, non_item, res_item = self.qstr2q(query_str)
-        embed = discord.Embed(title='指令拍賣機器人', color=0x6f5dfe)
+        title = None
+        if err_code != 0:
+            title = '錯誤 - ' + err_str
+        embed = discord.Embed(title=title, color=0x6f5dfe)
         item_str = self.func_to_query(res_item, self.op_auction_info, exist=True)
         beautifier = ['zero', 'one', 'two', 'three', 'four']
         for k in sorted(res_item.keys()):
             embed.add_field(name=f':{beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
         item_str = self.func_to_query(non_item, self.op_auction_info, exist=False)
-        for k in sorted(res_item.keys()):
+        for k in sorted(non_item.keys()):
             if len(non_item[k]) > 0:
-                embed.add_field(name=f'{self.num2attr(k)} ({k})', value='\n'.join(item_str[k]))
-        embed.set_footer(text='\n若有任何疑問或想追蹤競標狀況，請使用 /menu')
+                if k < len(self.item_types):
+                    embed.add_field(name=f':{beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
+                else:
+                    embed.add_field(name=f'不存在之類別：({k})', value='\n'.join(item_str[k]))
+        embed.set_footer(text='\n若有任何指令使用之疑問或想追蹤競標狀況，請使用 /menu')
         return embed
 
     def func_to_query(self, query: Dict[int, List[str]], func, **kwargs) -> Dict[int, List[Any]]:
@@ -178,12 +212,15 @@ class Auction(object):
 
     def op_add_bid(self, item_type, item_name, **kwargs):
         bidder = kwargs['person']
-        if bidder in self.bids[item_type]:
-            bid = self.bids[item_type][self.bids[item_type].index(bidder)]
+        b_wrap_p = BidWrapper(bidder, item_name)
+        items = self.bids[item_type]
+        if b_wrap_p in items:
+            bid_index = items.index(b_wrap_p)
+            bid = items[bid_index]
             bid.set_valid(True)
-        else:
-            bid = Bid(person=bidder, target=item_name, category=item_type, score=kwargs['score'])
-            self.bids[item_type].append(bid)
+            return bid
+        bid = Bid(person=bidder, target=item_name, category=item_type, score=kwargs['score'])
+        self.bids[item_type].append(bid)
         return bid
 
     def add_bid(self, query_str: str, person: discord.Member, score: int = -1) \
@@ -193,16 +230,25 @@ class Auction(object):
             self.func_to_query(non_ext_items, self.op_add_bid, score=score, person=person)
             self.func_to_query(exist_items, self.op_add_bid, score=score, person=person)
             err_code = 0
-        return err_code
+        return err_code, err_msg, non_ext_items, exist_items
 
-    def remove_bids(self, item_types: List[int], item_names: List[str], person: discord.Member):
-        # remove items
-        non_ext_name = []
-        removed_name = []
+    def op_rm_bid(self, item_type, item_name, person: discord.Member):
+        items = self.bids[item_type]
+        items = list(filter(lambda x: item_name == x, items))
+        items = list(filter(lambda x: x.valid, items))
+        flag = False
+        for item in items:
+            if person == item:
+                item.set_valid(False)
+                flag = True
+        return flag
 
-        for item_type in item_types:
-            type_items = self.bids[item_type]
-            p_cart = list(filter(lambda x: x.person == person, type_items))
+    def remove_bid(self, query_str: str, person: discord.Member):
+        err_code, err_msg, non_ext_items, exist_items = self.qstr2q(query_str)
+        if err_code == 0 or err_code == -2:
+            self.func_to_query(exist_items, self.op_rm_bid, person=person)
+            err_code = 0
+        return err_code, err_msg, non_ext_items, exist_items
 
     def query(self, args: Dict[int, List[str]]) -> (int, Dict[int, Dict[str, List[Bid]]]):
         target_types: List[int] = sorted(args.keys())
@@ -238,7 +284,7 @@ class Auction(object):
                 for bidder_id, bidder_score in bidders:
                     type_index = self.attr2num(k)
                     query_str = f'-{type_index} {bid_item}'
-                    err_code = self.add_bid(query_str, bidder_id, -1 if reroll else bidder_score)
+                    err_code, _, _, _ = self.add_bid(query_str, bidder_id, -1 if reroll else bidder_score)
                     if err_code == -1:
                         return err_code
 
