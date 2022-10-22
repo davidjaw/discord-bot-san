@@ -62,12 +62,26 @@ async def removeall(ctx, p_mention=None):
 @bot.command()
 async def fremove(ctx, *msg):
     """
-        格式： /fremove -<type> @<member> <item_name>
+        格式： /fremove @<member> -<type> <item_name>
     """
     if ctx.author.guild_permissions.administrator:
         if bot.auction is None:
             bot.auction = Auction(ctx)
         ba = bot.auction
+
+        err_code, err_msg, query_str = ba.forced_command_chk('fremove', msg)
+        if err_code != 0:
+            await ctx.send(err_msg)
+            return
+
+        p_id = int(msg[0][2:-1])
+        person = await ba.get_user(p_id, ctx, bot)
+        err_code, err_str, q_err, q_res = ba.remove_bid(query_str, person)
+        if err_code == 0:
+            await ctx.send(f'刪除成功，可以透過 `/menu` 確認當前的購買清單ㄛ!')
+        else:
+            embed = ba.auction_info(ba.q2qstr(q_err))
+            await ctx.send(f'有錯誤發生，但已刪除指定且存在之物品，請使用 `/menu` 確認', embed=embed)
     else:
         await ctx.send('僅有管理員可以進行 `/reset` 和 `/clear` ')
 
@@ -75,18 +89,33 @@ async def fremove(ctx, *msg):
 @bot.command()
 async def fadd(ctx, *msg):
     """
-        格式： /fadd -<type> @<member> <item_name>
+        格式： /fadd  @<member> -<type> <item_name>
     """
     if ctx.author.guild_permissions.administrator:
         if bot.auction is None:
             bot.auction = Auction(ctx)
         ba = bot.auction
+
+        err_code, err_msg, query_str = ba.forced_command_chk('fadd', msg)
+        if err_code != 0:
+            await ctx.send(err_msg)
+            return
+
+        p_id = int(msg[0][2:-1])
+        person = await ba.get_user(p_id, ctx, bot)
+        err_code, err_str, q_err, q_res = ba.add_bid(query_str, person)
+        if err_code == 0:
+            embed = ba.auction_info(query_str)
+            await ctx.send(embed=embed)
+        else:
+            embed = ba.auction_info(ba.q2qstr(q_err))
+            await ctx.send(embed=embed)
     else:
         await ctx.send('僅有管理員可以進行 `/reset` 和 `/clear` ')
 
 
 @bot.command()
-async def add(ctx: discord.ext.commands.Context, *msg):
+async def add(ctx: commands.Context, *msg):
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction

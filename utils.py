@@ -1,7 +1,8 @@
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Tuple
 import json
 import random
 import discord
+from discord.ext import commands
 from datetime import datetime, timedelta
 from discord.ui import Select, View, Button
 import os
@@ -111,6 +112,23 @@ class Auction(object):
             return -1
         return 0
 
+    def forced_command_chk(self, command: str, command_param: Tuple[Any]) -> (int, str, str):
+        if len(command_param) < 2 or command_param[0][:2] != '<@':
+            return -1, f'格式錯誤，請使用以下格式進行: `/{command} <member> -<type> <item_name>`', None
+        query_str = ' '.join(command_param[1:])
+        if self.querystr_fmt_chk(query_str) != 0:
+            return -1, f'物品格式錯誤，請使用以下格式進行: `/{command} <member> -<type> <item_name>`', None
+        return 0, '', query_str
+
+    @staticmethod
+    async def get_user(p_id: int, ctx: commands.Context, bot: commands.Bot) -> discord.Member:
+        person = ctx.guild.get_member(p_id)
+        if person is None:
+            person = bot.get_user(p_id)
+        if person is None:
+            person = await bot.fetch_user(p_id)
+        return person
+
     @staticmethod
     def q2qstr(q: Dict[int, List[str]]) -> str:
         result = ''
@@ -211,16 +229,15 @@ class Auction(object):
                 result[t].append(func(t, t_item, **kwargs))
         return result
 
-    def op_add_bid(self, item_type, item_name, **kwargs):
-        bidder = kwargs['person']
-        b_wrap_p = BidWrapper(bidder, item_name)
+    def op_add_bid(self, item_type, item_name, person, score):
+        b_wrap_p = BidWrapper(person, item_name)
         items = self.bids[item_type]
         if b_wrap_p in items:
             bid_index = items.index(b_wrap_p)
             bid = items[bid_index]
             bid.set_valid(True)
             return bid
-        bid = Bid(person=bidder, target=item_name, category=item_type, score=kwargs['score'])
+        bid = Bid(person=person, target=item_name, category=item_type, score=score)
         self.bids[item_type].append(bid)
         return bid
 
@@ -240,9 +257,8 @@ class Auction(object):
         items = list(filter(lambda x: x.valid, items))
         flag = False
         for item in items:
-            if person == item:
-                item.set_valid(False)
-                flag = True
+            item.set_valid(False)
+            flag = True
         return flag
 
     def remove_bid(self, query_str: str, person: discord.Member):
