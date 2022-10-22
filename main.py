@@ -48,12 +48,12 @@ async def remove(ctx, *args):
 
 @bot.command()
 async def removeall(ctx, p_mention=None):
-    if not ctx.author.guild_permissions.administrator:
-        await ctx.send('僅有管理員可以進行 `/removeall <@people>`。')
-        return -1
     if bot.auction is None:
         bot.auction = Auction(ctx)
     ba = bot.auction
+    if p_mention is not None and not ctx.author.guild_permissions.administrator:
+        await ctx.send('僅有管理員可以進行 `/removeall <@people>`。')
+        return -1
     p_mention = ctx.author.mention if p_mention is None else p_mention
     revert_str = ba.remove_all(p_mention)
     await ctx.send(f'已經刪除{p_mention}的全部競標資料，可使用以下指令復原：```{revert_str}```')
