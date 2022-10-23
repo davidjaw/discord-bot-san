@@ -138,7 +138,10 @@ async def reset(ctx):
     # check if author is admin or with role
     roles = []
     if ctx.author.guild_permissions.administrator:
-        bot.auction = Auction(ctx)
+        if bot.auction is None:
+            bot.auction = Auction(ctx)
+        ba = bot.auction
+        ba.reset()
         if len(bot.spk_his) > 0:
             for msg in bot.spk_his:
                 await msg.delete()
@@ -235,8 +238,9 @@ async def lvchk(ctx, *msg):
 async def load(ctx, *msg):
     roles = []
     if ctx.author.guild_permissions.administrator:
-        ba = Auction(ctx)
-        bot.auction = ba
+        if bot.auction is None:
+            bot.auction = Auction(ctx)
+        ba = bot.auction
 
         reroll = len(msg) > 0 and msg[0] == '-rr'
         await ba.load(ctx, bot, reroll)

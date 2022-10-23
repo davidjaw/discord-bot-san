@@ -95,6 +95,7 @@ class Auction(object):
         self.beautifier = ['zero', 'one', 'two', 'three', 'four']
         self.menu_options: List[List[str]] = [
             ['🛒', '購物車', '檢視自己目前的競標內容'],
+            ['📑', '查看清單', '檢視目前出價狀況'],
             ['🤏', '競標物品教學', '檢視競標物品的教學'],
             ['📤', '刪除物品教學', '檢視刪除競標物品的教學'],
             ['⏲️', '經驗計算教學', '檢視如何使用經驗計算指令'],
@@ -332,7 +333,11 @@ class Auction(object):
             result[i] = bids
         return result
 
+    def reset(self):
+        self.bids = [[] for _ in range(len(self.item_types))]
+
     async def load(self, ctx, bot, reroll: bool):
+        self.reset()
         load_file = 'record.json' if os.path.exists('record.json') else 'data.json'
         from cryptography.fernet import Fernet
         key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
@@ -388,7 +393,25 @@ class Auction(object):
         err_code = 0 if err else -1
         return err_code, embed
 
-    async def btn_cb_refresh_cart(self, interaction):
+    async def info_panel_callback(self, interaction: discord.interactions.Interaction):
+        res = interaction.response.send_message
+        item_type = interaction.data['custom_id']
+        embed = self.show_all_bids(f'-{item_type}')
+        print(self.bids[int(item_type)])
+        await res(embed=embed, ephemeral=True)
+
+    async def info_panel(self, interaction: discord.interactions.Interaction):
+        res = interaction.response.send_message
+        buttons = [Button(label=x, custom_id=str(i), style=discord.ButtonStyle.gray) for i, x in enumerate(self.item_types_cn)]
+        view = View(timeout=10 * 60)
+        for btn in buttons:
+            view.add_item(btn)
+            btn.callback = self.info_panel_callback
+        t = datetime.now() + timedelta(minutes=10)
+        msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
+        await res(msg, ephemeral=True, view=view)
+
+    async def btn_cb_refresh_cart(self, interaction: discord.interactions.Interaction):
         user = interaction.user
         err_code, user_cart = self.show_cart(person=user)
         t = datetime.now() + timedelta(minutes=10)
@@ -398,7 +421,7 @@ class Auction(object):
         else:
             await interaction.response.send_message('你的購物車是空的ㄛ!', ephemeral=True)
 
-    async def sel_callback(self, interaction):
+    async def sel_callback(self, interaction: discord.interactions.Interaction):
         res = interaction.response.send_message
         user = interaction.user
         selected_option = int(interaction.data['values'][0])
@@ -416,26 +439,28 @@ class Auction(object):
             else:
                 await res('你的購物車是空的ㄛ!', ephemeral=True)
         elif selected_option == 1:
-            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.attr_name_cn)]
+            await self.info_panel(interaction)
+        elif selected_option == 2:
+            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.item_types_cn)]
             description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
                           f'如果你想同時競標 `曹操` 的武將和武將碎片，可以打 `/add -01 曹操`\n' \
-                          f'也可以同時競標多個物品，如以下指令同時競標了【整個曹操、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'也可以同時競標多個物品，如以下指令同時競標了【整個曹操、曹操碎片、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
                           f'`/add -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
                           f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
                           f'最終會依照每個人的分數進行分配 (由大到小)'
             embed = discord.Embed(title='增加拍賣物品教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
-        elif selected_option == 2:
-            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.attr_name_cn)]
+        elif selected_option == 3:
+            type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.item_types_cn)]
             description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
                           f'如果你想同時刪除 `曹操` 的武將和武將碎片，可以打 `/remove -01 曹操`\n' \
-                          f'也可以同時競標多個物品，如以下指令同時刪除了【整個曹操、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'也可以同時競標多個物品，如以下指令同時刪除了【整個曹操、曹操碎片、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
                           f'`/remove -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
                           f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
                           f'最終會依照每個人的分數進行分配 (由大到小)'
             embed = discord.Embed(title='刪除拍賣物品教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
-        elif selected_option == 3:
+        elif selected_option == 4:
             description = f'經驗計算的公式如下：\n' \
                           f'掃盪獲得經驗 = 體力 * 等級；每日任務為 100 * 等級 * 14\n' \
                           f'體力為 6 分鐘回復 1 點\n' \
