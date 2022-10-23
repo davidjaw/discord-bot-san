@@ -3,7 +3,7 @@ import json
 import random
 import discord
 from discord.ext import commands
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from discord.ui import Select, View, Button
 import os
 
@@ -105,7 +105,7 @@ class Auction(object):
         self.ctx = ctx
 
         cur_date = datetime.utcnow() + timedelta(hours=8)
-        yy, mm, dd = [int(x) for x in cur_date.strftime('%Y %m %d').split(' ')]
+        yy, mm, dd = [int(x) for x in cur_date.astimezone(timezone.utc).strftime('%Y %m %d').split(' ')]
         due_date = datetime(yy, mm, dd) + timedelta(hours=-8 + 20, minutes=20)
         target_date = datetime(yy, mm, dd if due_date > cur_date else dd + 1)
         self.time_due = target_date + timedelta(hours=20 - 8, minutes=20)
@@ -410,14 +410,14 @@ class Auction(object):
             view.add_item(btn)
             btn.callback = self.info_panel_callback
         t = datetime.utcnow() + timedelta(hours=8, minutes=10)
-        msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
+        msg = f'(按鈕互動功能將於`{t.astimezone(timezone.utc).strftime("%H:%M:%S")}`後失效)'
         await res(msg, ephemeral=True, view=view)
 
     async def btn_cb_refresh_cart(self, interaction: discord.interactions.Interaction):
         user = interaction.user
         err_code, user_cart = self.show_cart(person=user)
         t = datetime.utcnow() + timedelta(hours=8, minutes=10)
-        msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
+        msg = f'(按鈕互動功能將於`{t.astimezone(timezone.utc).strftime("%H:%M:%S")}`後失效)'
         if err_code == 0:
             await interaction.response.edit_message(content=msg, embed=user_cart)
         else:
@@ -435,7 +435,7 @@ class Auction(object):
             view.add_item(button)
             err_code, user_cart = self.show_cart(person=user)
             t = datetime.utcnow() + timedelta(hours=8, minutes=10)
-            msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
+            msg = f'(按鈕互動功能將於`{t.astimezone(timezone.utc).strftime("%H:%M:%S")}`後失效)'
             if err_code == 0:
                 await res(msg, embed=user_cart, ephemeral=True, view=view)
             else:
