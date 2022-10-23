@@ -314,7 +314,7 @@ class Auction(object):
         return err_code, err_msg, non_ext_items, exist_items
 
     def remove_all(self, person: str) -> (int, str, Dict[int, Dict[str, List[Bid]]]):
-        revert_str = '/add '
+        revert_str = '/add'
         for type_index in range(len(self.item_types)):
             type_bids = self.bids[type_index]
             flag = True
@@ -409,14 +409,14 @@ class Auction(object):
         for btn in buttons:
             view.add_item(btn)
             btn.callback = self.info_panel_callback
-        t = datetime.now() + timedelta(minutes=10)
+        t = datetime.utcnow() + timedelta(hours=8, minutes=10)
         msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
         await res(msg, ephemeral=True, view=view)
 
     async def btn_cb_refresh_cart(self, interaction: discord.interactions.Interaction):
         user = interaction.user
         err_code, user_cart = self.show_cart(person=user)
-        t = datetime.now() + timedelta(minutes=10)
+        t = datetime.utcnow() + timedelta(hours=8, minutes=10)
         msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
         if err_code == 0:
             await interaction.response.edit_message(content=msg, embed=user_cart)
@@ -434,7 +434,7 @@ class Auction(object):
             view = View(timeout=60 * 10)
             view.add_item(button)
             err_code, user_cart = self.show_cart(person=user)
-            t = datetime.now() + timedelta(minutes=10)
+            t = datetime.utcnow() + timedelta(hours=8, minutes=10)
             msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
             if err_code == 0:
                 await res(msg, embed=user_cart, ephemeral=True, view=view)
