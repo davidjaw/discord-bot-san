@@ -240,11 +240,14 @@ class Auction(object):
         embed = discord.Embed(title='拍賣資料', color=0x6f5dfe)
         for k in sorted(res_q.keys()):
             remain_bids = self.bids[k]
+            remain_bids = list(filter(lambda x: x.valid, remain_bids))
             text_type = ''
             while len(remain_bids) > 0:
                 target = remain_bids[0].target
                 text_type += f'【{target}】\n'
                 target_bids, remain_bids = self.filter_by_target(remain_bids, lambda x: x.target == target)
+                target_bids = sorted(target_bids)
+                target_bids = list(reversed(target_bids))
                 for bid in target_bids:
                     text_type += bid.get_display_str() + '\n'
             text_type = text_type if text_type != '' else '(尚無競標物品)'

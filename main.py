@@ -164,7 +164,7 @@ async def dump(ctx):
         fn = 'record.json'
         if os.path.exists(fn):
             t = datetime.now()
-            os.rename(fn, fn + f'-{t.strftime("%Y-%m-%d %H:%M:%S")}')
+            os.rename(fn, fn + f'-{t.strftime("%Y%m%d %H-%M-%S")}')
         with open(fn, 'w') as f:
             json.dump(en, f)
         await ctx.send(f'已將資料存到`{fn}`\n')
