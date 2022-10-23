@@ -320,27 +320,39 @@ class Auction(object):
         return result
 
     async def load(self, ctx, bot, reroll: bool):
+        load_file = 'record.json' if os.path.exists('record.json') else 'data.json'
         from cryptography.fernet import Fernet
         key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
         fernet = Fernet(key)
-        with open('data.json', 'r') as f:
+        with open(load_file, 'r') as f:
             content = json.load(f)
         de = fernet.decrypt(content.encode())
         dump_mem = json.loads(de)
 
-        for k in dump_mem.keys():
-            if k not in self.item_types:
-                return -1, f'key {k} not in defined type {self.item_types}'
-            bid_items = dump_mem[k]
-            for bid_item in bid_items:
-                bidders = bid_items[bid_item]
-                for bidder_id, bidder_score in bidders:
+        if load_file == 'data.json':
+            for k in dump_mem.keys():
+                if k not in self.item_types:
+                    return -1, f'key {k} not in defined type {self.item_types}'
+                bid_items = dump_mem[k]
+                for bid_item in bid_items:
+                    bidders = bid_items[bid_item]
+                    for bidder_id, bidder_score in bidders:
+                        bidder = await self.get_user(bidder_id, ctx, bot)
+                        type_index = self.attr2num(k)
+                        query_str = f'-{type_index} {bid_item}'
+                        err_code, _, _, _ = self.add_bid(query_str, bidder, -1 if reroll else bidder_score)
+                        if err_code == -1:
+                            return err_code
+        else:
+            bids = [[] for i in range(len(self.item_types))]
+            for index, type_bids in enumerate(dump_mem):
+                for bid in type_bids:
+                    bidder_id = bid['person']
                     bidder = await self.get_user(bidder_id, ctx, bot)
-                    type_index = self.attr2num(k)
-                    query_str = f'-{type_index} {bid_item}'
-                    err_code, _, _, _ = self.add_bid(query_str, bidder, -1 if reroll else bidder_score)
-                    if err_code == -1:
-                        return err_code
+                    score = -1 if reroll else bid['score']
+                    new_bid = Bid(bidder, bid['target'], bid['category'], score)
+                    bids[index].append(new_bid)
+            self.bids = bids
 
     def show_cart(self, person: discord.Member):
         embed = discord.Embed(title='野生的購物車', color=0x6f5dfe)
