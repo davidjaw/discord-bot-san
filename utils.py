@@ -389,7 +389,8 @@ class Auction(object):
                 text_type += f'【{item_name}】\n'
                 for bid in bid_list:
                     text_type += bid.get_display_str() + '\n'
-            embed.add_field(name=f':{self.beautifier[i]}: {self.num2attr(i)}', value=text_type)
+            if text_type != '':
+                embed.add_field(name=f':{self.beautifier[i]}: {self.num2attr(i)}', value=text_type)
         err_code = 0 if err else -1
         return err_code, embed
 
