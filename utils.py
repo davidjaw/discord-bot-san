@@ -104,6 +104,12 @@ class Auction(object):
         self.bids: List[List[Bid]] = [[] for _ in self.item_types]
         self.ctx = ctx
 
+        cur_date = datetime.utcnow() + timedelta(hours=8)
+        yy, mm, dd = [int(x) for x in cur_date.strftime('%Y %m %d').split(' ')]
+        due_date = datetime(yy, mm, dd) + timedelta(hours=-8 + 20, minutes=20)
+        target_date = datetime(yy, mm, dd if due_date > cur_date else dd + 1)
+        self.time_due = target_date + timedelta(hours=20 - 8, minutes=20)
+
     def attr2num(self, attr_name):
         if attr_name in self.item_types:
             return self.item_types.index(attr_name)
@@ -283,12 +289,8 @@ class Auction(object):
     def add_bid(self, query_str: str, person: discord.Member, score: int = -1) \
             -> (int, str, Dict[int, List[str]]):
         err_code, err_msg, non_ext_items, exist_items = self.qstr2q(query_str)
-        target_hour = 20
-        target_min = 20
-        cur_time = datetime.utcnow() + timedelta(hours=8)
-        yy, mm, dd = [int(x) for x in cur_time.strftime('%Y %m %d').split(' ')]
-        target_time = datetime(yy, mm, dd) + timedelta(hours=target_hour, minutes=target_min)
-        late = cur_time >= target_time
+        cur_time = datetime.utcnow()
+        late = cur_time >= self.time_due
         if err_code == 0 or err_code == -2:
             self.func_to_query(non_ext_items, self.op_add_bid, score=score, person=person, late=late)
             self.func_to_query(exist_items, self.op_add_bid, score=score, person=person, late=late)
