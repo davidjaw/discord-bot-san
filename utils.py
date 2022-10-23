@@ -398,7 +398,6 @@ class Auction(object):
         res = interaction.response.send_message
         item_type = interaction.data['custom_id']
         embed = self.show_all_bids(f'-{item_type}')
-        print(self.bids[int(item_type)])
         await res(embed=embed, ephemeral=True)
 
     async def info_panel(self, interaction: discord.interactions.Interaction):
