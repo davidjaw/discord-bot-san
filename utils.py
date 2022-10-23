@@ -26,7 +26,7 @@ class BidWrapper(object):
 
 
 class Bid(object):
-    def __init__(self, person, target, category, score=-1):
+    def __init__(self, person, target, category, score=-1, late=False):
         self.person: discord.Member
         self.target: str
         self.category: str
@@ -36,7 +36,10 @@ class Bid(object):
         self.target = target
         self.category = category
         self.valid: bool = True
-        self.late: bool = False
+        self.late: bool = late
+
+    def set_late(self, setup: bool):
+        self.late = setup
 
     def set_valid(self, setup: bool):
         self.valid = setup
@@ -53,7 +56,8 @@ class Bid(object):
         return my_dict
 
     def get_display_str(self):
-        return f'{self.person.display_name} - {self.score}'
+        late_str = '⚠️' if self.late else ''
+        return f'{late_str}{self.person.display_name} - {self.score}'
 
     def __repr__(self):
         return f'Bid: <target: {self.target}, person: {self.person}, valid: {self.valid}, score: {self.score}>'
@@ -221,7 +225,7 @@ class Auction(object):
                     embed.add_field(name=f':{self.beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
                 else:
                     embed.add_field(name=f'不存在之類別：({k})', value='\n'.join(item_str[k]))
-        embed.set_footer(text='\n若有任何指令使用之疑問或想追蹤競標狀況，請使用 /menu')
+        embed.set_footer(text='----------\n⚠️表示為遲到(20:20後)\n若有任何指令使用之疑問或想追蹤競標狀況，請使用 /menu')
         return embed
 
     @staticmethod
@@ -263,7 +267,7 @@ class Auction(object):
                 result[t].append(func(t, t_item, **kwargs))
         return result
 
-    def op_add_bid(self, item_type, item_name, person, score):
+    def op_add_bid(self, item_type, item_name, person, score, late):
         b_wrap_p = BidWrapper(person, item_name)
         items = self.bids[item_type]
         if b_wrap_p in items:
@@ -271,16 +275,22 @@ class Auction(object):
             bid = items[bid_index]
             bid.set_valid(True)
             return bid
-        bid = Bid(person=person, target=item_name, category=item_type, score=score)
+        bid = Bid(person=person, target=item_name, category=item_type, score=score, late=late)
         self.bids[item_type].append(bid)
         return bid
 
     def add_bid(self, query_str: str, person: discord.Member, score: int = -1) \
             -> (int, str, Dict[int, List[str]]):
         err_code, err_msg, non_ext_items, exist_items = self.qstr2q(query_str)
+        target_hour = 20
+        target_min = 20
+        cur_time = datetime.utcnow() + timedelta(hours=8)
+        yy, mm, dd = [int(x) for x in cur_time.strftime('%Y %m %d').split(' ')]
+        target_time = datetime(yy, mm, dd) + timedelta(hours=target_hour, minutes=target_min)
+        late = cur_time >= target_time
         if err_code == 0 or err_code == -2:
-            self.func_to_query(non_ext_items, self.op_add_bid, score=score, person=person)
-            self.func_to_query(exist_items, self.op_add_bid, score=score, person=person)
+            self.func_to_query(non_ext_items, self.op_add_bid, score=score, person=person, late=late)
+            self.func_to_query(exist_items, self.op_add_bid, score=score, person=person, late=late)
             err_code = 0
         return err_code, err_msg, non_ext_items, exist_items
 
