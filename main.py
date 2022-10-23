@@ -152,18 +152,20 @@ async def reset(ctx):
 async def dump(ctx):
     roles = []
     if ctx.author.guild_permissions.administrator:
+        if bot.auction is None:
+            bot.auction = Auction(ctx)
         ba = bot.auction
-
+        dump_mem = ba.dump()
         json_string = json.dumps(dump_mem)
         from cryptography.fernet import Fernet
         key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
         fernet = Fernet(key)
         en = fernet.encrypt(json_string.encode()).decode()
-        fn = 'data.json'
+        fn = 'record.json'
         if os.path.exists(fn):
             t = datetime.now()
-            os.rename(fn, fn + f'-{t.strftime("%Y%m%d-%H%M%S")}')
-        with open('data.json', 'w') as f:
+            os.rename(fn, fn + f'-{t.strftime("%Y-%m-%d %H:%M:%S")}')
+        with open(fn, 'w') as f:
             json.dump(en, f)
         await ctx.send(f'已將資料存到`{fn}`\n')
     else:

@@ -311,6 +311,14 @@ class Auction(object):
                     bid.set_valid(False)
         return revert_str
 
+    def dump(self):
+        result = [[] for _ in self.bids]
+        for i in range(len(self.bids)):
+            bids = self.bids[i]
+            bids = [x.to_dict() for x in bids]
+            result[i] = bids
+        return result
+
     async def load(self, ctx, bot, reroll: bool):
         from cryptography.fernet import Fernet
         key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
