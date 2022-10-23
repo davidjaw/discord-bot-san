@@ -52,6 +52,9 @@ class Bid(object):
         }
         return my_dict
 
+    def get_display_str(self):
+        return f'{self.person.display_name} - {self.score}'
+
     def __repr__(self):
         return f'Bid: <target: {self.target}, person: {self.person}, valid: {self.valid}, score: {self.score}>'
 
@@ -85,6 +88,7 @@ class Auction(object):
     def __init__(self, ctx):
         self.item_types_cn: List[str] = ['武將', '武將碎片', '神兵', '神兵碎片', '將魂']
         self.item_types: List[str] = ['hero', 'hero_frag', 'weapon', 'weapon_frag', 'soul']
+        self.beautifier = ['zero', 'one', 'two', 'three', 'four']
         self.menu_options: List[List[str]] = [
             ['🛒', '購物車', '檢視自己目前的競標內容'],
             ['🤏', '競標物品教學', '檢視競標物品的教學'],
@@ -126,6 +130,7 @@ class Auction(object):
         if person is None:
             person = bot.get_user(p_id)
         if person is None:
+            print(f'Fetching user: {p_id}')
             person = await bot.fetch_user(p_id)
         return person
 
@@ -139,7 +144,7 @@ class Auction(object):
                 result += f'{item} '
         return result
 
-    def qstr2q(self, query_str: str) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
+    def qstr2q(self, query_str: str, chk: bool = True) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
         # convert query string to query dictionary
         result = {}
         queries = list(filter(lambda x: x != '', query_str.split('-')))
@@ -151,7 +156,7 @@ class Auction(object):
                     result[t] = []
                 for item_name in q[1:]:
                     result[t].append(item_name)
-        return self.chk_query(result)
+        return self.chk_query(result) if chk else (0, '', {}, result)
 
     def chk_query(self, args: Dict[int, List[str]]) -> (int, str, Dict[int, List[str]], Dict[int, List[str]]):
         """
@@ -195,7 +200,7 @@ class Auction(object):
             item_bids = list(filter(lambda x: x.valid, item_bids))
             item_bids = sorted(item_bids)
             item_bids = list(reversed(item_bids))
-            text += '\n'.join([f'{x.person.display_name} - {x.score}' for x in item_bids])
+            text += '\n'.join([x.get_display_str() for x in item_bids])
         else:
             text = f'【{item_name}】\n目前無人競標\n'
         return text
@@ -207,17 +212,43 @@ class Auction(object):
             title = '錯誤 - ' + err_str
         embed = discord.Embed(title=title, color=0x6f5dfe)
         item_str = self.func_to_query(res_item, self.op_auction_info, exist=True)
-        beautifier = ['zero', 'one', 'two', 'three', 'four']
         for k in sorted(res_item.keys()):
-            embed.add_field(name=f':{beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
+            embed.add_field(name=f':{self.beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
         item_str = self.func_to_query(non_item, self.op_auction_info, exist=False)
         for k in sorted(non_item.keys()):
             if len(non_item[k]) > 0:
                 if k < len(self.item_types):
-                    embed.add_field(name=f':{beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
+                    embed.add_field(name=f':{self.beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
                 else:
                     embed.add_field(name=f'不存在之類別：({k})', value='\n'.join(item_str[k]))
         embed.set_footer(text='\n若有任何指令使用之疑問或想追蹤競標狀況，請使用 /menu')
+        return embed
+
+    @staticmethod
+    def filter_by_target(bid_list: List[Bid], cond_func):
+        p_list = []
+        n_list = []
+        for bid in bid_list:
+            if cond_func(bid):
+                p_list.append(bid)
+            else:
+                n_list.append(bid)
+        return p_list, n_list
+
+    def show_all_bids(self, query_str: str):
+        err_c, err_s, err_q, res_q = self.qstr2q(query_str, chk=False)
+        embed = discord.Embed(title='拍賣資料', color=0x6f5dfe)
+        for k in sorted(res_q.keys()):
+            remain_bids = self.bids[k]
+            text_type = ''
+            while len(remain_bids) > 0:
+                target = remain_bids[0].target
+                text_type += f'【{target}】\n'
+                target_bids, remain_bids = self.filter_by_target(remain_bids, lambda x: x.target == target)
+                for bid in target_bids:
+                    text_type += bid.get_display_str() + '\n'
+            text_type = text_type if text_type != '' else '(尚無競標物品)'
+            embed.add_field(name=f':{self.beautifier[k]}: {self.num2attr(k)}', value=text_type)
         return embed
 
     def func_to_query(self, query: Dict[int, List[str]], func, **kwargs) -> Dict[int, List[Any]]:
@@ -280,7 +311,7 @@ class Auction(object):
                     bid.set_valid(False)
         return revert_str
 
-    def load(self, reroll: bool):
+    async def load(self, ctx, bot, reroll: bool):
         from cryptography.fernet import Fernet
         key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
         fernet = Fernet(key)
@@ -296,15 +327,37 @@ class Auction(object):
             for bid_item in bid_items:
                 bidders = bid_items[bid_item]
                 for bidder_id, bidder_score in bidders:
+                    bidder = await self.get_user(bidder_id, ctx, bot)
                     type_index = self.attr2num(k)
                     query_str = f'-{type_index} {bid_item}'
-                    err_code, _, _, _ = self.add_bid(query_str, bidder_id, -1 if reroll else bidder_score)
+                    err_code, _, _, _ = self.add_bid(query_str, bidder, -1 if reroll else bidder_score)
                     if err_code == -1:
                         return err_code
 
+    def show_cart(self, person: discord.Member):
+        embed = discord.Embed(title='野生的購物車', color=0x6f5dfe)
+        err = False
+        for i, type_bids in enumerate(self.bids):
+            p_items = list(filter(lambda x: x.person == person, type_bids))
+            p_items = list(filter(lambda x: x.valid, p_items))
+            err = err or len(p_items) > 0
+            item_names = [x.target for x in p_items]
+            text_type = ''
+            for item_name in item_names:
+                bid_list = list(filter(lambda x: x.valid, type_bids))
+                bid_list = list(filter(lambda x: x.target == item_name, bid_list))
+                bid_list = sorted(bid_list)
+                bid_list = list(reversed(bid_list))
+                text_type += f'【{item_name}】\n'
+                for bid in bid_list:
+                    text_type += bid.get_display_str() + '\n'
+            embed.add_field(name=f':{self.beautifier[i]}: {self.num2attr(i)}', value=text_type)
+        err_code = 0 if err else -1
+        return err_code, embed
+
     async def btn_cb_refresh_cart(self, interaction):
         user = interaction.user
-        err_code, user_cart = self.show_cart(target=user)
+        err_code, user_cart = self.show_cart(person=user)
         t = datetime.now() + timedelta(minutes=10)
         msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
         if err_code == 0:
@@ -322,7 +375,7 @@ class Auction(object):
             button.callback = self.btn_cb_refresh_cart
             view = View(timeout=60 * 10)
             view.add_item(button)
-            err_code, user_cart = self.show_cart(target=user)
+            err_code, user_cart = self.show_cart(person=user)
             t = datetime.now() + timedelta(minutes=10)
             msg = f'(按鈕互動功能將於`{t.strftime("%H:%M:%S")}`後失效)'
             if err_code == 0:
@@ -371,7 +424,6 @@ if __name__ == '__main__':
     print()
 
     auc.add_bid('-01 郭嘉 2 3 -23 1 弓 2 3 -1 4', 123456789)
-
 
     # intents = discord.Intents.default()
     # intents.message_content = True

@@ -153,16 +153,7 @@ async def dump(ctx):
     roles = []
     if ctx.author.guild_permissions.administrator:
         ba = bot.auction
-        score = ba.score
-        item_types = ba.item_types
-        dump_mem = {}
-        for k in ba.item_types.keys():
-            bid_item = item_types[k]
-            dump_mem[k] = {}
-            for b in bid_item:
-                dump_mem[k][b] = []
-                for p_idx, p in enumerate(bid_item[b]):
-                    dump_mem[k][b].append([p.id, score[k][b][p]])
+
         json_string = json.dumps(dump_mem)
         from cryptography.fernet import Fernet
         key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
@@ -242,10 +233,14 @@ async def lvchk(ctx, *msg):
 async def load(ctx, *msg):
     roles = []
     if ctx.author.guild_permissions.administrator:
-        from cryptography.fernet import Fernet
-        key = b'ywaPq2351Lg3-3Zc7v7m5f8dvyg_fLRyYOvk-REps3s='
         ba = Auction(ctx)
         bot.auction = ba
+
+        reroll = len(msg) > 0 and msg[0] == '-rr'
+        await ba.load(ctx, bot, reroll)
+        q_str = [str(i) for i, _ in enumerate(ba.item_types)]
+        embed = ba.show_all_bids(f'-{"".join(q_str)}')
+        await ctx.send('成功載入資料', embed=embed)
     else:
         await ctx.send('僅有管理員可以進行 `/load`')
 
