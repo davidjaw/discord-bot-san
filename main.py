@@ -189,10 +189,10 @@ async def menu(ctx):
     )
 
     select.callback = ba.sel_callback
-    view = View()
+    view = View(timeout=10 * 60)
     view.add_item(select)
 
-    del_time = datetime.now() + timedelta(minutes=10)
+    del_time = ba.get_tw_time(timedelta(minutes=10))
     menu_msg = f"野生的機器人跳出來啦! (將於`{del_time.strftime('%H:%M:%S')}`自動刪除此訊息) ⬇️\n" \
                f"請注意如果要重新選取相同的選項，必須**選其他的再選回來**!"
     await ctx.send(menu_msg, view=view, delete_after=10 * 60)

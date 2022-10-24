@@ -104,11 +104,21 @@ class Auction(object):
         self.bids: List[List[Bid]] = [[] for _ in self.item_types]
         self.ctx = ctx
 
-        cur_date = datetime.utcnow() + timedelta(hours=8)
-        yy, mm, dd = [int(x) for x in cur_date.astimezone(timezone.utc).strftime('%Y %m %d').split(' ')]
-        due_date = datetime(yy, mm, dd) + timedelta(hours=-8 + 20, minutes=20)
-        target_date = datetime(yy, mm, dd if due_date > cur_date else dd + 1)
-        self.time_due = target_date + timedelta(hours=20 - 8, minutes=20)
+        self.time_due = None
+        self.update_time_due()
+
+    def update_time_due(self):
+        t_cur = (datetime.utcnow() + timedelta(hours=8)).astimezone(timezone(timedelta(hours=8)))
+        yy, mm, dd = [int(x) for x in t_cur.strftime('%Y %m %d').split(' ')]
+        t_today = datetime(yy, mm, dd, tzinfo=timezone(timedelta(hours=8)))
+        if t_today + timedelta(hours=20, minutes=20) < t_cur:
+            t_today += timedelta(days=1)
+        self.time_due = t_today + timedelta(hours=20, minutes=20)
+
+    def get_tw_time(self, offset: timedelta = timedelta(minutes=0)):
+        current = datetime.utcnow().replace(tzinfo=timezone.utc)
+        current += offset
+        return current.astimezone(timezone(timedelta(hours=8)))
 
     def attr2num(self, attr_name):
         if attr_name in self.item_types:
@@ -289,7 +299,7 @@ class Auction(object):
     def add_bid(self, query_str: str, person: discord.Member, score: int = -1) \
             -> (int, str, Dict[int, List[str]]):
         err_code, err_msg, non_ext_items, exist_items = self.qstr2q(query_str)
-        cur_time = datetime.utcnow()
+        cur_time = self.get_tw_time()
         late = cur_time >= self.time_due
         if err_code == 0 or err_code == -2:
             self.func_to_query(non_ext_items, self.op_add_bid, score=score, person=person, late=late)
@@ -409,15 +419,13 @@ class Auction(object):
         for btn in buttons:
             view.add_item(btn)
             btn.callback = self.info_panel_callback
-        t = datetime.utcnow() + timedelta(hours=8, minutes=10)
-        msg = f'(按鈕互動功能將於`{t.astimezone(timezone.utc).strftime("%H:%M:%S")}`後失效)'
+        msg = f'(按鈕互動功能將於`{self.get_tw_time(timedelta(minutes=10)).strftime("%H:%M:%S")}`後失效)'
         await res(msg, ephemeral=True, view=view)
 
     async def btn_cb_refresh_cart(self, interaction: discord.interactions.Interaction):
         user = interaction.user
         err_code, user_cart = self.show_cart(person=user)
-        t = datetime.utcnow() + timedelta(hours=8, minutes=10)
-        msg = f'(按鈕互動功能將於`{t.astimezone(timezone.utc).strftime("%H:%M:%S")}`後失效)'
+        msg = f'(按鈕互動功能將於`{self.get_tw_time(timedelta(minutes=10)).strftime("%H:%M:%S")}`後失效)'
         if err_code == 0:
             await interaction.response.edit_message(content=msg, embed=user_cart)
         else:
@@ -434,8 +442,7 @@ class Auction(object):
             view = View(timeout=60 * 10)
             view.add_item(button)
             err_code, user_cart = self.show_cart(person=user)
-            t = datetime.utcnow() + timedelta(hours=8, minutes=10)
-            msg = f'(按鈕互動功能將於`{t.astimezone(timezone.utc).strftime("%H:%M:%S")}`後失效)'
+            msg = f'(按鈕互動功能將於`{self.get_tw_time(timedelta(minutes=10)).strftime("%H:%M:%S")}`後失效)'
             if err_code == 0:
                 await res(msg, embed=user_cart, ephemeral=True, view=view)
             else:
