@@ -83,7 +83,7 @@ async def fremove(ctx, *msg):
             embed = ba.auction_info(ba.q2qstr(q_err))
             await ctx.send(f'有錯誤發生，但已刪除指定且存在之物品，請使用 `/menu` 確認', embed=embed)
     else:
-        await ctx.send('僅有管理員可以進行 `/reset` 和 `/clear` ')
+        await ctx.send('僅有管理員可以進行 `/fremove`')
 
 
 @bot.command()
@@ -111,7 +111,7 @@ async def fadd(ctx, *msg):
             embed = ba.auction_info(ba.q2qstr(q_err))
             await ctx.send(embed=embed)
     else:
-        await ctx.send('僅有管理員可以進行 `/reset` 和 `/clear` ')
+        await ctx.send('僅有管理員可以進行 `/fadd`')
 
 
 @bot.command()

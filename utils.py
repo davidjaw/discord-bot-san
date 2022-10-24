@@ -108,7 +108,7 @@ class Auction(object):
         self.update_time_due()
 
     def update_time_due(self):
-        t_cur = (datetime.utcnow() + timedelta(hours=8)).astimezone(timezone(timedelta(hours=8)))
+        t_cur = datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))
         yy, mm, dd = [int(x) for x in t_cur.strftime('%Y %m %d').split(' ')]
         t_today = datetime(yy, mm, dd, tzinfo=timezone(timedelta(hours=8)))
         if t_today + timedelta(hours=20, minutes=20) < t_cur:
@@ -347,6 +347,7 @@ class Auction(object):
 
     def reset(self):
         self.bids = [[] for _ in range(len(self.item_types))]
+        self.update_time_due()
 
     async def load(self, ctx, bot, reroll: bool):
         self.reset()
