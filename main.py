@@ -4,7 +4,7 @@ import discord
 import os
 import utils
 from utils import Auction
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from discord.ext import commands
 from discord.ui import Select, View, Button
 import random
@@ -204,26 +204,30 @@ async def lvchk(ctx, *msg):
         await ctx.send('指令格式錯誤，請參考 `/menu` 中的教學。')
         return
     try:
+        if bot.auction is None:
+            bot.auction = Auction(ctx)
+        ba = bot.auction
+
+        tw_tz = timezone(timedelta(hours=8))
         level = int(msg[0])
         cur_exp = int(msg[1])
-        cur_time = datetime.utcnow()
-        y, mm, d, h, m, s = [int(x) for x in cur_time.strftime('%Y,%m,%d,%H,%M,%S').split(',')]
-        utc_today = datetime(y, mm, d)
-        target_time = datetime(y, mm, d) + timedelta(hours=21)
-        if h > 21 or (h == 20 and m > 0):
-            target_time = target_time + timedelta(days=1)
-        remain_seconds = (target_time - cur_time).total_seconds()
-        tw_time = cur_time + timedelta(hours=8)
+        time_cur = ba.get_tw_time()
+        y, mm, d, h, m, s = [int(x) for x in time_cur.strftime('%Y,%m,%d,%H,%M,%S').split(',')]
+        time_today = datetime(y, mm, d, tzinfo=tw_tz)
+        if h < 5:
+            time_today -= timedelta(days=1)
+        time_tomorrow = time_today + timedelta(days=1, hours=5)
+        remain_seconds = (time_tomorrow - time_cur).total_seconds()
         supply = 0
-        if cur_time < utc_today + timedelta(hours=12 - 8):
+        if time_cur < time_today + timedelta(hours=12):
             supply += 1
-        elif cur_time < utc_today + timedelta(hours=18 - 8):
+        if time_cur < time_today + timedelta(hours=18):
             supply += 1
         remain_energy = int((remain_seconds / 60) // 6)
         exp_energy = int((supply * 5 * 50 + remain_energy) // 5 * level * 5)
         exp_quest = level * 100 * 14
         content = f'{ctx.author.mention} 當前為 {level} 等，當前經驗為 {cur_exp:,}，假設體力目前為空\n' \
-                  f'當前時間為 {tw_time.strftime("%H:%M")}, 還有 {supply} 次糧食補給, ' \
+                  f'當前時間為 {time_cur.strftime("%H:%M")}, 還有 {supply} 次糧食補給, ' \
                   f'距離換日尚有 `{remain_seconds // 60:,.0f}` 分鐘\n' \
                   f'預期剩餘體力： 補給次數 * 5 * 50 ({supply * 5 * 50:,}) + 剩餘時間 / 6分鐘 ({remain_energy}) ' \
                   f'= `{remain_energy + supply * 5 * 50:,}`\n' \
