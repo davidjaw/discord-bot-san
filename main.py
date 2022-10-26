@@ -282,6 +282,24 @@ async def mylist(ctx):
     await ctx.send('查詢購買清單請使用 `/menu` 指令再選擇購物車ㄛ!')
 
 
+@bot.command()
+async def setclaim(ctx: commands.Context, *msg):
+    if len(msg) < 3:
+        await ctx.send('請使用 `/setclaim <標題> <物品名稱> <數量>` 來進行認領。\n'
+                       '例如 `/setclaim 龍舟 軍令 12` 代表龍舟拍賣有 12 個軍令提供認領。')
+        return
+    if ctx.author.guild_permissions.administrator:
+        if bot.auction is None:
+            bot.auction = Auction(ctx)
+        ba = bot.auction
+        embed = ba.set_claim(msg)
+        msg_obj = await ctx.send(embed=embed)
+        for i in range(int(msg[2])):
+            await msg_obj.add_reaction(ba.cnt_emoji[i])
+    else:
+        await ctx.send('僅有管理員可以進行 `/setclaim`')
+
+
 if __name__ == '__main__':
     mode = '-local' if len(sys.argv) == 1 else sys.argv[1]
     modes = ['-local', '-remote', '-dev']

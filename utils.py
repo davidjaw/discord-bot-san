@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from discord.ui import Select, View, Button
+from string import ascii_lowercase
 import os
 
 
@@ -101,7 +102,13 @@ class Auction(object):
             ['⏲️', '經驗計算教學', '檢視如何使用經驗計算指令'],
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
+        d = {1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine'}
+        self.cnt_emoji = '1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣'.split(' ')
+        for s in '🇦 🇧 🇨 🇩 🇪 🇫 🇬 🇭 🇮 🇯 🇰 🇱 🇲 🇳 🇴 🇵 🇶 🇷 🇸 🇹 🇺 🇻 🇼 🇽 🇾 🇿':
+            if s != ' ':
+                self.cnt_emoji.append(s)
         self.bids: List[List[Bid]] = [[] for _ in self.item_types]
+        self.item_claims: Dict[str, List[discord.Member]] = {}
         self.ctx = ctx
 
         self.time_due = None
@@ -345,8 +352,21 @@ class Auction(object):
             result[i] = bids
         return result
 
+    def set_claim(self, msg):
+        title, item_name, num = msg
+        key = title + item_name
+        if key not in self.item_claims.keys():
+            self.item_claims[key] = [None for _ in range(int(num))]
+        description = ''
+        for i in range(int(num)):
+            p = self.item_claims[key][i]
+            description += f'{item_name} - {i}: {"無" if p is None else p.display_name}\n'
+        embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
+        return embed
+
     def reset(self):
         self.bids = [[] for _ in range(len(self.item_types))]
+        self.item_claims = {}
         self.update_time_due()
 
     async def load(self, ctx, bot, reroll: bool):
