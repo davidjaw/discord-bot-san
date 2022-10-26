@@ -7,6 +7,7 @@ from utils import Auction
 from datetime import datetime, timedelta, timezone
 from discord.ext import commands
 from discord.ui import Select, View, Button
+from asyncio import run
 import random
 import json
 import os
@@ -292,12 +293,42 @@ async def setclaim(ctx: commands.Context, *msg):
         if bot.auction is None:
             bot.auction = Auction(ctx)
         ba = bot.auction
-        embed = ba.set_claim(msg)
-        msg_obj = await ctx.send(embed=embed)
+        embed, key = ba.get_claim_embed(msg)
+        msg_obj = await ctx.send(f'{msg[0]}-{msg[1]}\n請有被抽中的各位點選下面表情認領', embed=embed)
+        ba.item_claims['msg'].append(msg_obj)
         for i in range(int(msg[2])):
-            await msg_obj.add_reaction(ba.cnt_emoji[i])
+            bot.loop.create_task(msg_obj.add_reaction(ba.cnt_emoji[i]))
     else:
         await ctx.send('僅有管理員可以進行 `/setclaim`')
+
+
+@bot.event
+async def on_reaction_remove(reaction: discord.Reaction, user: discord.Member):
+    ba: Auction = bot.auction
+    if user != bot.user:
+        if reaction.message in ba.item_claims['msg'] and reaction.emoji in ba.cnt_emoji:
+            index = ba.cnt_emoji.index(reaction.emoji)
+            msg = reaction.message.content
+            key = msg.split('\n')[0]
+            embed, _ = ba.get_claim_embed(key=key, index=index, p=user, remove=True)
+            await reaction.message.edit(content=f'{key}\n請有被抽中的各位點選下面表情認領', embed=embed)
+
+
+@bot.event
+async def on_reaction_add(reaction: discord.Reaction, user: discord.Member):
+    ba: Auction = bot.auction
+    if user != bot.user:
+        if reaction.message in ba.item_claims['msg'] and reaction.emoji in ba.cnt_emoji:
+            index = ba.cnt_emoji.index(reaction.emoji)
+            msg = reaction.message.content
+            key = msg.split('\n')[0]
+            if ba.item_claims[key][index] is not None:
+                if user != ba.item_claims[key][index]:
+                    await reaction.message.channel.send(f'{user.mention}：第 {index + 1} 個物品已經被選走囉! 請重新選擇!',
+                                                        delete_after=30)
+            else:
+                embed, _ = ba.get_claim_embed(key=key, index=index, p=user)
+                await reaction.message.edit(content=f'{key}\n請有被抽中的各位點選下面表情認領', embed=embed)
 
 
 if __name__ == '__main__':

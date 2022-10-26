@@ -1,4 +1,4 @@
-from typing import List, Any, Dict, Tuple
+from typing import List, Any, Dict, Tuple, Union
 import json
 import random
 import discord
@@ -102,14 +102,15 @@ class Auction(object):
             ['⏲️', '經驗計算教學', '檢視如何使用經驗計算指令'],
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
-        d = {1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine'}
         self.cnt_emoji = '1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣'.split(' ')
         for s in '🇦 🇧 🇨 🇩 🇪 🇫 🇬 🇭 🇮 🇯 🇰 🇱 🇲 🇳 🇴 🇵 🇶 🇷 🇸 🇹 🇺 🇻 🇼 🇽 🇾 🇿':
             if s != ' ':
                 self.cnt_emoji.append(s)
-        self.bids: List[List[Bid]] = [[] for _ in self.item_types]
-        self.item_claims: Dict[str, List[discord.Member]] = {}
-        self.ctx = ctx
+        self.bids: List[List[Union[Bid, BidWrapper]]] = [[] for _ in self.item_types]
+        self.item_claims: Dict[str, List[Union[discord.Member, None, discord.Message]]] = {
+            'msg': [],
+        }
+        self.ctx: commands.Context = ctx
 
         self.time_due = None
         self.update_time_due()
@@ -122,7 +123,8 @@ class Auction(object):
             t_today += timedelta(days=1)
         self.time_due = t_today + timedelta(hours=20, minutes=20)
 
-    def get_tw_time(self, offset: timedelta = timedelta(minutes=0)):
+    @staticmethod
+    def get_tw_time(offset: timedelta = timedelta(minutes=0)):
         current = datetime.utcnow().replace(tzinfo=timezone.utc)
         current += offset
         return current.astimezone(timezone(timedelta(hours=8)))
@@ -135,7 +137,7 @@ class Auction(object):
         else:
             return -1
 
-    def num2attr(self, num: int, cn = True):
+    def num2attr(self, num: int, cn=True):
         return self.item_types_cn[num] if cn else self.item_types[num]
 
     @staticmethod
@@ -282,7 +284,8 @@ class Auction(object):
             embed.add_field(name=f':{self.beautifier[k]}: {self.num2attr(k)}', value=text_type)
         return embed
 
-    def func_to_query(self, query: Dict[int, List[str]], func, **kwargs) -> Dict[int, List[Any]]:
+    @staticmethod
+    def func_to_query(query: Dict[int, List[str]], func, **kwargs) -> Dict[int, List[Any]]:
         result = {}
         for t in query.keys():
             t_list = query[t]
@@ -352,21 +355,35 @@ class Auction(object):
             result[i] = bids
         return result
 
-    def set_claim(self, msg):
-        title, item_name, num = msg
-        key = title + item_name
-        if key not in self.item_claims.keys():
-            self.item_claims[key] = [None for _ in range(int(num))]
-        description = ''
-        for i in range(int(num)):
-            p = self.item_claims[key][i]
-            description += f'{item_name} - {i}: {"無" if p is None else p.display_name}\n'
-        embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
-        return embed
+    def get_claim_embed(self, msg=None, key=None, index=-1, p: Union[None, discord.Member]=None, remove=False):
+        if msg is not None:
+            title, item_name, num = msg
+            key = title + '-' + item_name
+            self.item_claims[key] = []
+            for _ in range(int(num)):
+                self.item_claims[key].append(None)
+            description = ''
+            for i in range(int(num)):
+                p = self.item_claims[key][i]
+                description += f'{item_name} - {i + 1}: {"無" if p is None else p.display_name}\n'
+            embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
+            return embed, key
+        else:
+            if remove and self.item_claims[key][index] == p:
+                self.item_claims[key][index] = None
+            elif not remove:
+                self.item_claims[key][index] = p
+            title, item_name = key.split('-')
+            description = ''
+            for i in range(len(self.item_claims[key])):
+                p = self.item_claims[key][i]
+                description += f'{item_name} - {i + 1}: {"無" if p is None else p.display_name}\n'
+            embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
+            return embed, key
 
     def reset(self):
         self.bids = [[] for _ in range(len(self.item_types))]
-        self.item_claims = {}
+        self.item_claims = {'msg': []}
         self.update_time_due()
 
     async def load(self, ctx, bot, reroll: bool):
@@ -395,7 +412,7 @@ class Auction(object):
                         if err_code == -1:
                             return err_code
         else:
-            bids = [[] for i in range(len(self.item_types))]
+            bids = [[] for _ in range(len(self.item_types))]
             for index, type_bids in enumerate(dump_mem):
                 for bid in type_bids:
                     bidder_id = bid['person']
@@ -435,7 +452,8 @@ class Auction(object):
 
     async def info_panel(self, interaction: discord.interactions.Interaction):
         res = interaction.response.send_message
-        buttons = [Button(label=x, custom_id=str(i), style=discord.ButtonStyle.gray) for i, x in enumerate(self.item_types_cn)]
+        buttons = [Button(label=x, custom_id=str(i), style=discord.ButtonStyle.gray)
+                   for i, x in enumerate(self.item_types_cn)]
         view = View(timeout=10 * 60)
         for btn in buttons:
             view.add_item(btn)
@@ -504,28 +522,4 @@ class Auction(object):
 
 
 if __name__ == '__main__':
-    from discord.ext import commands
-    import sys
-
-    auc = Auction()
-    auc.load(False)
-    print()
-
-    auc.add_bid('-01 郭嘉 2 3 -23 1 弓 2 3 -1 4', 123456789)
-
-    # intents = discord.Intents.default()
-    # intents.message_content = True
-    # intents.members = True
-    # prefix_str = '/'
-    # bot = commands.Bot(command_prefix=prefix_str, intents=intents)
-    # bot.auction = None
-    # bot.spk_his = []
-    # mode = '-local' if len(sys.argv) == 1 else sys.argv[1]
-    # modes = ['-local', '-remote', '-dev']
-    # mode = modes.index(mode)
-    # token_file = './token' if mode < 2 else 'token-dev'
-    # if mode == 1:
-    #     import keep_alive
-    #     keep_alive.keep_alive()
-    # token = read_token(token_file)
-    # bot.run(token)
+    pass
