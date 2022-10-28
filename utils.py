@@ -99,6 +99,7 @@ class Auction(object):
             ['📑', '查看清單', '檢視目前出價狀況'],
             ['🤏', '競標物品教學', '檢視競標物品的教學'],
             ['📤', '刪除物品教學', '檢視刪除競標物品的教學'],
+            ['👮‍♂️', '管理員指令', '檢視管理員指令教學'],
             ['⏲️', '經驗計算教學', '檢視如何使用經驗計算指令'],
             ['🤷‍♂️', '啥也不幹', '就只是個按鈕'],
         ]
@@ -355,7 +356,7 @@ class Auction(object):
             result[i] = bids
         return result
 
-    def get_claim_embed(self, msg=None, key=None, index=-1, p: Union[None, discord.Member]=None, remove=False):
+    def get_claim_embed(self, msg=None, key=None, index=-1, p: Union[None, discord.Member] = None, remove=False):
         if msg is not None:
             title, item_name, num = msg
             key = title + '-' + item_name
@@ -491,24 +492,38 @@ class Auction(object):
         elif selected_option == 2:
             type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.item_types_cn)]
             description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
+                          f'指令格式為：```/add -<types> <items>```' \
                           f'如果你想同時競標 `曹操` 的武將和武將碎片，可以打 `/add -01 曹操`\n' \
-                          f'也可以同時競標多個物品，如以下指令同時競標了【整個曹操、曹操碎片、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
-                          f'`/add -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
-                          f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
-                          f'最終會依照每個人的分數進行分配 (由大到小)'
+                          f'也可以同時競標多個物品，如以下指令同時競標了【整個曹操、曹操碎片、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:' \
+                          f'```/add -01 曹操 -1 司馬懿 -23 弓 葫蘆```' \
+                          f'指令完成後可以透過 `/menu` 來檢查自己當前的競標清單\n' \
+                          f'最終會依照每個人的分數進行分配 (由大到小)\n' \
+                          f'另外請注意，8:20後的競標會被標示為遲到，遲到者的購買順位將低於預約者。'
             embed = discord.Embed(title='增加拍賣物品教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
         elif selected_option == 3:
             type_descriptions = [f' - {s} (編號為 **`{i}`**)\n' for i, s in enumerate(self.item_types_cn)]
             description = f'物品分為以下幾個種類：\n{"".join(type_descriptions)}\n' \
+                          f'指令格式為：```/remove -<types> <items>```' \
                           f'如果你想同時刪除 `曹操` 的武將和武將碎片，可以打 `/remove -01 曹操`\n' \
-                          f'也可以同時競標多個物品，如以下指令同時刪除了【整個曹操、曹操碎片、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
+                          f'也可以同時刪除多個物品，如以下指令同時刪除了【整個曹操、曹操碎片、司馬懿碎片、整把弓、整個葫蘆、弓碎片、葫蘆碎片】:\n' \
                           f'`/remove -01 曹操 -1 司馬懿 -23 弓 葫蘆`\n\n' \
-                          f'指令完成後可以透過 `/menu` 或 `/mylist` 來檢查自己當前的競標清單\n' \
+                          f'指令完成後可以透過 `/menu` 來檢查自己當前的競標清單\n' \
                           f'最終會依照每個人的分數進行分配 (由大到小)'
             embed = discord.Embed(title='刪除拍賣物品教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
         elif selected_option == 4:
+            description = f'**1. 強制新增使用者之物品：**\n\t```/fadd @<person> -<types> <items>```' \
+                          f'除了需加入 `@<person>`之外，格式都與 `/add`相同，`/fremove`亦然。\n' \
+                          f'另外請注意 `@<person>` 需要 @ 到人才能正確執行 (即名字變成藍色)\n\n' \
+                          f'**2. 儲存與載入競拍資料**\n\t`/dump`是儲存當前拍賣的資料，`/load`則是載入\n\t請務必先進行 `/dump` 再 ' \
+                          f'`/clear` 或 `/load`，否則無法復原\n\n' \
+                          f'**3. 清空當日拍賣資料：**`/clear`\n請務必先使用 `/dump` 後再進行清空。\n\n' \
+                          f'**4. 物品認領**\n\t```/setclaim <title> <item> <number>```' \
+                          f'例如龍舟出了12個軍令，可以用 `/setclaim 龍舟 軍令 12` \n'
+            embed = discord.Embed(title='管理員指令列表', description=description, color=0x6f5dfe)
+            await res(embed=embed, ephemeral=True)
+        elif selected_option == 5:
             description = f'經驗計算的公式如下：\n' \
                           f'掃盪獲得經驗 = 體力 * 等級；每日任務為 100 * 等級 * 14\n' \
                           f'體力為 6 分鐘回復 1 點\n' \
