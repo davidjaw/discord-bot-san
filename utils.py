@@ -356,6 +356,25 @@ class Auction(object):
             result[i] = bids
         return result
 
+    def clear_claim(self, title: str, item_name: str, p_mention: str = None):
+        key = title + '-' + item_name
+        if p_mention is not None:
+            for i, p in enumerate(self.item_claims[key]):
+                if p is not None and p.mention == p_mention:
+                    self.item_claims[key][i] = None
+            return self.get_claim_embed(key=key)[0]
+        else:
+            del self.item_claims[key]
+
+    def get_claim_embed_content(self, key):
+        title, item_name = key.split('-')
+        description = ''
+        for i in range(len(self.item_claims[key])):
+            p = self.item_claims[key][i]
+            description += f'{item_name} - {i + 1}: {"無" if p is None else p.display_name}\n'
+        embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
+        return embed
+
     def get_claim_embed(self, msg=None, key=None, index=-1, p: Union[None, discord.Member] = None, remove=False):
         if msg is not None:
             title, item_name, num = msg
@@ -363,23 +382,14 @@ class Auction(object):
             self.item_claims[key] = []
             for _ in range(int(num)):
                 self.item_claims[key].append(None)
-            description = ''
-            for i in range(int(num)):
-                p = self.item_claims[key][i]
-                description += f'{item_name} - {i + 1}: {"無" if p is None else p.display_name}\n'
-            embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
+            embed = self.get_claim_embed_content(key)
             return embed, key
         else:
             if remove and self.item_claims[key][index] == p:
                 self.item_claims[key][index] = None
             elif not remove:
                 self.item_claims[key][index] = p
-            title, item_name = key.split('-')
-            description = ''
-            for i in range(len(self.item_claims[key])):
-                p = self.item_claims[key][i]
-                description += f'{item_name} - {i + 1}: {"無" if p is None else p.display_name}\n'
-            embed = discord.Embed(title=f'【{title}-{item_name}】', color=0x6f5dfe, description=description)
+            embed = self.get_claim_embed_content(key)
             return embed, key
 
     def reset(self):
@@ -520,7 +530,9 @@ class Auction(object):
                           f'`/clear` 或 `/load`，否則無法復原\n\n' \
                           f'**3. 清空當日拍賣資料：**`/clear`\n請務必先使用 `/dump` 後再進行清空。\n\n' \
                           f'**4. 物品認領**\n\t```/setclaim <title> <item> <number>```' \
-                          f'例如龍舟出了12個軍令，可以用 `/setclaim 龍舟 軍令 12` \n'
+                          f'例如龍舟出了12個軍令，可以用 `/setclaim 龍舟 軍令 12` \n\n' \
+                          f'**5. 清除認領**\n```/clearclaim <title> <item> @<people>```' \
+                          f'最後的 `@<people>` 若沒指定則會刪除整個指定的物品認領資料，若指定的話則會只刪除該會員的認領\n'
             embed = discord.Embed(title='管理員指令列表', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
         elif selected_option == 5:

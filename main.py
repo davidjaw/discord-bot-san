@@ -1,5 +1,6 @@
 import sys
 
+from typing import Union
 import discord
 import os
 import utils
@@ -281,6 +282,38 @@ async def info(ctx, *args):
 @bot.command()
 async def mylist(ctx):
     await ctx.send('查詢購買清單請使用 `/menu` 指令再選擇購物車ㄛ!')
+
+
+@bot.command()
+async def clearclaim(ctx: commands.Context, *msg):
+    if len(msg) < 2:
+        await ctx.send('請使用 `/clearclaim <標題> <物品名稱>` 來刪除認領。\n'
+                       '或使用 `/clearclaim <標題> <物品名稱> @<人>` 來刪除該筆認領')
+        return
+    if ctx.author.guild_permissions.administrator:
+        if bot.auction is None:
+            bot.auction = Auction(ctx)
+        ba = bot.auction
+        title, item_name, *p = msg
+        key = f'{title}-{item_name}'
+        msg_obj: Union[discord.Message, None] = None
+        msg_idx = None
+        for i, m in enumerate(ba.item_claims['msg']):
+            if m.content.split('\n')[0] == key:
+                msg_obj = m
+                msg_idx = i
+        if msg_idx is None:
+            await ctx.send('找不到該物品，可能指令打錯了? 請參考 `/menu` 教學。')
+            return
+        embed = ba.clear_claim(title, item_name, p_mention=p[0] if len(p) > 0 else None)
+        if len(msg) == 3:
+            await msg_obj.edit(content=f'{key}\n請有被抽中的各位點選下面表情認領', embed=embed)
+        else:
+            await msg_obj.delete()
+            ba.item_claims['msg'].pop(msg_idx)
+            await ctx.send(f'成功刪除道具認領【{title}-{item_name}】')
+    else:
+        await ctx.send('僅有管理員可以進行 `/setclaim`')
 
 
 @bot.command()
