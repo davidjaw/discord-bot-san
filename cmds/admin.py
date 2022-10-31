@@ -2,7 +2,8 @@ from typing import List, Any, Dict, Tuple, Union
 import discord
 from discord.ext import commands
 from utils import Auction
-from datetime import datetime
+from datetime import datetime, timedelta
+from discord.ui import Select, View, Button
 import os
 import json
 
@@ -148,9 +149,73 @@ class Main(commands.Cog):
                 embed = ba.auction_info(ba.q2qstr(q_err))
                 await ctx.send(embed=embed)
 
+    async def sclaim_callback(self, interaction: discord.interactions.Interaction):
+        res = interaction.response.send_message
+        labels = [
+            ['龍舟', '魔將', '攻城', '亂世名將'],
+            ['綢緞', '軍令']
+        ]
+        if 'values' in interaction.data.keys():
+            data = interaction.data['values'][0]
+        else:
+            data = interaction.data['custom_id']
+        idx_cb, idx_v, log = [x for x in data.split(',')]
+        idx_cb, idx_v = int(idx_cb), int(idx_v)
+        if idx_cb < 2:
+            btns = []
+            for i, x in enumerate(labels[idx_cb]):
+                custom_id = f'{idx_cb + 1},{i},{log}{idx_v}'
+                btns.append(Button(label=x, custom_id=custom_id, style=discord.ButtonStyle.gray))
+            view = View(timeout=10 * 60)
+            for btn in btns:
+                view.add_item(btn)
+                btn.callback = self.sclaim_callback
+            await res(view=view, ephemeral=True)
+        elif idx_cb == 2:
+            label_str = lambda x: f'有{x}個道具'
+            helper_options = [discord.SelectOption(value=f'{idx_cb + 1},{i},{log}{idx_v}',
+                                                   description=label_str(i), label=str(i)) for i in range(1, 15)]
+            select = Select(
+                placeholder="有幾個?",
+                options=helper_options
+            )
+            select.callback = self.sclaim_callback
+            view = View(timeout=10 * 60)
+            view.add_item(select)
+
+            await res(view=view, ephemeral=True)
+        else:
+            ba: Auction = self.bot.auction
+            sel = [int(i) for i in list(log)][1:]
+            msg = (labels[0][sel[0]], labels[1][sel[1]], idx_v)
+            embed, key = ba.get_claim_embed(msg)
+            await res(f'{msg[0]}-{msg[1]}\n請有被抽中的各位點選下面表情認領', embed=embed)
+            msg_obj = await interaction.original_response()
+            ba.item_claims['msg'].append(msg_obj)
+            for i in range(int(msg[2])):
+                self.bot.loop.create_task(msg_obj.add_reaction(ba.cnt_emoji[i]))
+
+
     @commands.command()
     async def sclaim(self, ctx):
-        await ctx.send('幹2')
+        options = [
+            ['✍️', '認領選單', '產生一個認領選單']
+        ]
+        access, ba = self.admin_chk(ctx)
+        if access:
+            helper_options = [discord.SelectOption(value=f'0,{i},', emoji=x[0], label=x[1], description=x[2])
+                              for i, x in enumerate(options)]
+            select = Select(
+                placeholder="🤖 點我開啟管理員命令選單",
+                options=helper_options
+            )
+            select.callback = self.sclaim_callback
+            view = View(timeout=10 * 60)
+            view.add_item(select)
+
+            await ctx.send(view=view, delete_after=10 * 60)
+        else:
+            ctx.send('只有管理員可以使用 `/sclaim`')
 
 
 async def setup(bot: commands.Bot):
