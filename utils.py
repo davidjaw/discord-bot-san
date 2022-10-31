@@ -364,7 +364,8 @@ class Auction(object):
                     self.item_claims[key][i] = None
             return self.get_claim_embed(key=key)[0]
         else:
-            del self.item_claims[key]
+            if key in self.item_claims.keys():
+                del self.item_claims[key]
 
     def get_claim_embed_content(self, key):
         title, item_name = key.split('-')
