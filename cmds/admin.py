@@ -130,10 +130,19 @@ class Main(commands.Cog):
     @commands.command()
     async def fadd(self, ctx, *msg):
         """
-            格式： /fadd  @<member> -<type> <item_name>
+            格式： /fadd  @<member> -<types> <item_name> -s <!score>
         """
         access, ba = self.admin_chk(ctx, '僅有管理員可以進行 `/fadd`')
         if access:
+            msg = list(msg)
+            score = -1
+            if '-s' in msg:
+                s_idx = msg.index('-s')
+                if len(msg) < s_idx + 1:
+                    await ctx.send('格式錯誤')
+                    return
+                msg.pop(s_idx)
+                score = int(msg.pop(s_idx))
             err_code, err_msg, query_str = ba.forced_command_chk('fadd', msg)
             if err_code != 0:
                 await ctx.send(err_msg)
@@ -141,7 +150,7 @@ class Main(commands.Cog):
 
             p_id = int(msg[0][2:-1])
             person = await ba.get_user(p_id, ctx, self.bot)
-            err_code, err_str, q_err, q_res = ba.add_bid(query_str, person)
+            err_code, err_str, q_err, q_res = ba.add_bid(query_str, person, score=score)
             if err_code == 0:
                 embed = ba.auction_info(query_str)
                 await ctx.send(embed=embed)
