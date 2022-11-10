@@ -114,7 +114,7 @@ class Auction(object):
         self.ctx: commands.Context = ctx
 
         self.time_due = None
-        self.due_time = [16, 16]
+        self.due_time = [20, 18]
         self.update_time_due()
 
     def update_time_due(self):
