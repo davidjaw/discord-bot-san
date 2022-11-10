@@ -114,15 +114,16 @@ class Auction(object):
         self.ctx: commands.Context = ctx
 
         self.time_due = None
+        self.due_time = [16, 16]
         self.update_time_due()
 
     def update_time_due(self):
         t_cur = datetime.utcnow().replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))
         yy, mm, dd = [int(x) for x in t_cur.strftime('%Y %m %d').split(' ')]
         t_today = datetime(yy, mm, dd, tzinfo=timezone(timedelta(hours=8)))
-        if t_today + timedelta(hours=20, minutes=20) < t_cur:
+        if t_today + timedelta(hours=self.due_time[0], minutes=self.due_time[1]) < t_cur:
             t_today += timedelta(days=1)
-        self.time_due = t_today + timedelta(hours=20, minutes=20)
+        self.time_due = t_today + timedelta(hours=self.due_time[0], minutes=self.due_time[1])
 
     @staticmethod
     def get_tw_time(offset: timedelta = timedelta(minutes=0)):
@@ -230,7 +231,9 @@ class Auction(object):
             item_bids = list(filter(lambda x: item_name == x, self.bids[item_type]))
             item_bids = list(filter(lambda x: x.valid, item_bids))
             item_bids = sorted(item_bids)
-            item_bids = list(reversed(item_bids))
+            item_late = list(filter(lambda x: x.late, item_bids))
+            item_otime = list(filter(lambda x: not x.late, item_bids))
+            item_bids = list(reversed(item_late + item_otime))
             text += '\n'.join([x.get_display_str() for x in item_bids])
         else:
             text = f'【{item_name}】\n目前無人競標\n'
@@ -252,7 +255,8 @@ class Auction(object):
                     embed.add_field(name=f':{self.beautifier[k]}: {self.num2attr(k)}', value='\n'.join(item_str[k]))
                 else:
                     embed.add_field(name=f'不存在之類別：({k})', value='\n'.join(item_str[k]))
-        embed.set_footer(text='----------\n⚠️表示為遲到(20:20後)\n若有任何指令使用之疑問或想追蹤競標狀況，請使用 /menu')
+        embed.set_footer(text=f'----------\n⚠️表示為遲到({self.due_time[0]}:{self.due_time[1]}後)\n'
+                              f'若有任何指令使用之疑問或想追蹤競標狀況，請使用 /menu')
         return embed
 
     @staticmethod
@@ -509,7 +513,7 @@ class Auction(object):
                           f'```/add -01 曹操 -1 司馬懿 -23 弓 葫蘆```' \
                           f'指令完成後可以透過 `/menu` 來檢查自己當前的競標清單\n' \
                           f'最終會依照每個人的分數進行分配 (由大到小)\n' \
-                          f'另外請注意，8:20後的競標會被標示為遲到，遲到者的購買順位將低於預約者。'
+                          f'另外請注意，{self.due_time[0]}:{self.due_time[1]}後的競標會被標示為遲到，遲到者的購買順位將低於預約者。'
             embed = discord.Embed(title='增加拍賣物品教學', description=description, color=0x6f5dfe)
             await res(embed=embed, ephemeral=True)
         elif selected_option == 3:

@@ -183,7 +183,7 @@ class Main(commands.Cog):
         elif idx_cb == 2:
             label_str = lambda x: f'有{x}個道具'
             helper_options = [discord.SelectOption(value=f'{idx_cb + 1},{i},{log}{idx_v}',
-                                                   description=label_str(i), label=str(i)) for i in range(1, 15)]
+                                                   description=label_str(i), label=str(i)) for i in range(1, 18)]
             select = Select(
                 placeholder="有幾個?",
                 options=helper_options
